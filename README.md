@@ -1,20 +1,23 @@
-# Console Relay
+# Browser Relay
 
-**A 100% local Chrome extension and HTTP/MCP server for capturing and managing browser console logs.**
+**A 100% local Chrome extension and HTTP/MCP server for capturing browser console logs and network requests for LLM analysis.**
 
 > ⚠️ **Important**: This tool is designed for local development use only. It runs entirely on your machine with no external connections or cloud services.
 
 ## Features
 
-- **Chrome Extension**: Captures all console.log, warn, error, and info messages from any website
-- **Local HTTP Server**: Express.js server with SQLite storage (port 8765) - no external connections
-- **MCP Integration**: Access logs via Model Context Protocol tools in AI assistants
-- **Real-time Streaming**: Server-Sent Events for live log monitoring
-- **Persistent Storage**: Logs saved to local SQLite database file
-- **Circular Buffer**: Automatic cleanup keeps only the latest 10k logs
-- **Batch Processing**: Efficient log batching with retry logic
-- **Type Safe**: Built with TypeScript for reliability
-- **Privacy First**: All data stays on your machine
+- **🖥️ Console Log Capture**: All console.log, warn, error, and info messages from any website
+- **🌐 Network Request Monitoring**: HTTP requests with headers, payloads, responses, and timing
+- **🤖 LLM-Optimized Output**: Structured, emoji-rich logs designed for AI assistant analysis
+- **🧹 Smart Noise Filtering**: Automatically filters out images, tracking, and irrelevant requests
+- **🎯 Domain Filtering**: Capture logs only from specified domains
+- **📊 Local HTTP Server**: Express.js server with SQLite storage (port 8765) - no external connections
+- **🔌 MCP Integration**: Access logs via Model Context Protocol tools in AI assistants (Claude, Cursor, etc.)
+- **⚡ Real-time Streaming**: Server-Sent Events for live log monitoring
+- **💾 Persistent Storage**: Logs and requests saved to local SQLite database
+- **🔄 Circular Buffer**: Automatic cleanup keeps only the latest 10k entries
+- **📦 Batch Processing**: Efficient batching with retry logic and page load optimization
+- **🔒 Privacy First**: All data stays on your machine, zero external connections
 
 ## Quick Start
 
@@ -49,31 +52,45 @@ The server will start on `http://localhost:8765`
 
 1. Visit any website
 2. Open browser console (F12)
-3. Type: `console.log("Hello from console logger!")`
+3. Type: `console.log("Hello from Browser Relay!")`
 4. Check server logs or use MCP tools to see captured logs
 
 ## HTTP API Endpoints
+
+### Console Logs
 
 - `POST /logs` - Submit log batches from extension
 - `GET /logs` - Query logs with filters (limit, offset, level, url, time range)
 - `DELETE /logs` - Clear all stored logs
 - `GET /logs/stream` - Real-time log stream via Server-Sent Events
+
+### Network Requests
+
+- `POST /network-requests` - Submit network request batches from extension
+- `GET /network-requests` - Query network requests with filters (limit, offset, method, url, status, time range)
+- `GET /network-requests/:id` - Get specific network request by ID
+- `DELETE /network-requests` - Clear all stored network requests
+- `GET /network-requests/stream` - Real-time network request stream via Server-Sent Events
+
+### System
+
 - `GET /health` - Server health check
+- `GET /allowed-domains` - Check domain filtering configuration
 
 ### API Examples
 
 ```bash
-# Get recent logs
-curl "http://localhost:8765/logs?limit=10"
+# Console Logs
+curl "http://localhost:8765/logs?limit=10"                    # Recent logs
+curl "http://localhost:8765/logs?level=error"                # Error logs only
+curl "http://localhost:8765/logs?url=example.com"            # Logs from specific site
+curl -X DELETE "http://localhost:8765/logs"                  # Clear all logs
 
-# Get error logs only
-curl "http://localhost:8765/logs?level=error"
-
-# Get logs from specific URL
-curl "http://localhost:8765/logs?url=example.com"
-
-# Clear all logs
-curl -X DELETE "http://localhost:8765/logs"
+# Network Requests
+curl "http://localhost:8765/network-requests?limit=10"       # Recent requests
+curl "http://localhost:8765/network-requests?method=POST"    # POST requests only
+curl "http://localhost:8765/network-requests?status=404"     # Failed requests
+curl -X DELETE "http://localhost:8765/network-requests"      # Clear all requests
 ```
 
 ## MCP Integration
@@ -83,7 +100,7 @@ curl -X DELETE "http://localhost:8765/logs"
 **Option 1: Simple Installation in Claude Code:**
 
 ```bash
-claude mcp add console-relay -- npx -y console-relay
+claude mcp add browser-relay -- npx -y browser-relay
 ```
 
 **Manual Installation:**
@@ -99,9 +116,9 @@ claude mcp add console-relay -- npx -y console-relay
    ```json
    {
      "mcpServers": {
-       "console-relay": {
+       "browser-relay": {
          "command": "node",
-         "args": ["path/to/console/server/dist/index.js"],
+         "args": ["path/to/browser-relay/server/dist/index.js"],
          "env": {
            "MCP_MODE": "true"
          }
@@ -114,50 +131,44 @@ claude mcp add console-relay -- npx -y console-relay
 
 ### Available MCP Tools
 
-Once the MCP server is running, you can use these tools:
+Once the MCP server is running, you can use these tools to analyze captured data:
 
 #### `get_console_logs`
 
 Retrieve console logs with optional filters.
 
-**Parameters:**
-
-- `limit` (number, default: 100) - Maximum number of logs to return
-- `offset` (number, default: 0) - Number of logs to skip
-- `level` (string) - Filter by log level: "log", "warn", "error", "info"
-- `url` (string) - Filter by page URL (partial match)
-- `startTime` (string) - Filter logs after this timestamp (ISO string)
-- `endTime` (string) - Filter logs before this timestamp (ISO string)
-
-**Examples:**
-
 ```javascript
-// Get recent 50 logs
-get_console_logs({ limit: 50 });
-
-// Get only error logs
-get_console_logs({ level: "error", limit: 100 });
+// Get recent error logs
+get_console_logs({ level: "error", limit: 50 });
 
 // Get logs from specific website
 get_console_logs({ url: "github.com" });
 
-// Get logs from last hour
+// Get logs from time range
 get_console_logs({
   startTime: "2025-01-01T10:00:00.000Z",
   endTime: "2025-01-01T11:00:00.000Z",
 });
 ```
 
+#### `get_network_requests`
+
+Retrieve network requests with optional filters.
+
+```javascript
+// Get recent API calls
+get_network_requests({ url: "/api/", limit: 20 });
+
+// Get failed requests
+get_network_requests({ statusCode: 404 });
+
+// Get POST requests
+get_network_requests({ method: "POST" });
+```
+
 #### `search_logs`
 
 Search console logs by text content.
-
-**Parameters:**
-
-- `query` (string, required) - Text to search for in log messages and stack traces
-- `limit` (number, default: 100) - Maximum results to return
-
-**Examples:**
 
 ```javascript
 // Search for specific errors
@@ -167,16 +178,25 @@ search_logs({ query: "TypeError" });
 search_logs({ query: "handleClick" });
 ```
 
-#### `clear_console_logs`
+#### `search_network_requests`
 
-Clear all stored console logs.
+Search network requests by URL, headers, or body content.
 
-**Parameters:** None
+```javascript
+// Search for API endpoints
+search_network_requests({ query: "graphql" });
 
-**Example:**
+// Search for authentication requests
+search_network_requests({ query: "authorization" });
+```
+
+#### `clear_console_logs` / `clear_network_requests`
+
+Clear all stored data.
 
 ```javascript
 clear_console_logs();
+clear_network_requests();
 ```
 
 ## Development
@@ -184,24 +204,31 @@ clear_console_logs();
 ### Project Structure
 
 ```
-console/
-├── server/                 # HTTP/MCP Server
-│   ├── src/               # TypeScript source code
-│   │   ├── index.ts       # Main server entry point
-│   │   ├── mcp/          # MCP server implementation
-│   │   ├── routes/       # Express.js routes
-│   │   ├── storage/      # Database and storage logic
-│   │   └── types.ts      # TypeScript type definitions
-│   ├── dist/             # Compiled JavaScript
-│   ├── package.json      # Server dependencies
-│   └── tsconfig.json     # TypeScript configuration
-├── extension/            # Chrome Extension
-│   ├── manifest.json     # Extension manifest (v3)
-│   ├── content.js        # Console log capture script
-│   ├── background.js     # Service worker for HTTP requests
-│   └── icons/            # Extension icons and generation tools
-├── package.json          # Root workspace configuration
-└── README.md             # This file
+browser-relay/
+├── server/                    # HTTP/MCP Server
+│   ├── src/                  # TypeScript source code
+│   │   ├── index.ts          # Main server entry point
+│   │   ├── mcp/             # MCP server implementation
+│   │   ├── routes/          # Express.js routes
+│   │   │   ├── logs.ts      # Console log endpoints
+│   │   │   └── network-requests.ts # Network request endpoints
+│   │   ├── storage/         # Database and storage logic
+│   │   │   ├── database.ts  # SQLite setup
+│   │   │   ├── LogStorage.ts # Console log storage
+│   │   │   └── NetworkStorage.ts # Network request storage
+│   │   └── types.ts         # TypeScript type definitions
+│   ├── dist/               # Compiled JavaScript
+│   ├── data/               # SQLite database files
+│   ├── package.json        # Server dependencies
+│   └── tsconfig.json       # TypeScript configuration
+├── extension/              # Chrome Extension
+│   ├── manifest.json       # Extension manifest (v3)
+│   ├── inject.js          # Console log capture (MAIN world)
+│   ├── content.js         # Message relay (ISOLATED world)
+│   ├── background.js      # Service worker + network capture
+│   └── icons/             # Extension icons
+├── package.json            # Root workspace configuration
+└── README.md               # This file
 ```
 
 ### Development Commands
@@ -227,7 +254,11 @@ npm test
 
 - `PORT` - Server port (default: 8765)
 - `MCP_MODE` - Set to "true" to enable MCP server mode
-- `CONSOLE_RELAY_ALLOWED_DOMAINS` - Comma-separated list of domains to capture logs from (if not set, captures from all domains)
+- `ALLOWED_DOMAINS` - Comma-separated list of domains to capture from (if not set, captures from all domains)
+- `LOG_CONSOLE_MESSAGES` - Set to "false" to disable console message logging to server output (default: true)
+- `LOG_NETWORK_REQUESTS` - Set to "false" to disable network request logging to server output (default: true)
+
+**Note:** You must restart the server after changing environment variables for changes to take effect.
 
 ### Example Environment Configuration
 
@@ -238,20 +269,39 @@ Create a `.env` file in the server directory:
 PORT=8765
 MCP_MODE=true
 
-# Only capture logs from these domains (optional)
-CONSOLE_RELAY_ALLOWED_DOMAINS=localhost,github.com,stackoverflow.com
+# Only capture from these domains (optional) - supports subdomains
+ALLOWED_DOMAINS=localhost,github.com,stackoverflow.com
+
+# Control what gets logged to server output for LLM visibility
+LOG_CONSOLE_MESSAGES=true  # Show console logs in server output
+LOG_NETWORK_REQUESTS=true  # Show network requests in server output
 ```
 
-If `CONSOLE_RELAY_ALLOWED_DOMAINS` is not set, the extension will capture logs from all websites. When set, it will only capture logs from the specified domains and their subdomains.
+If `ALLOWED_DOMAINS` is not set, the extension will capture from all websites. When set, it only captures from specified domains and their subdomains.
 
 ## How It Works
 
-1. **Chrome Extension** injects a content script that wraps `console.log`, `console.warn`, `console.error`, and `console.info`
-2. **Log Capture** includes timestamp, message, stack trace, page URL, and log level
-3. **Batching** collects logs and sends them every 5 seconds or when 50 logs are accumulated
-4. **HTTP Server** receives log batches via POST requests and stores them in SQLite
-5. **Circular Buffer** automatically removes old logs when storage exceeds 10,000 entries
-6. **MCP Tools** provide programmatic access to query, search, and manage logs
+### 🖥️ Console Log Capture
+
+1. **Extension** injects scripts that wrap `console.log`, `console.warn`, `console.error`, and `console.info`
+2. **Smart Filtering** automatically excludes Browser Relay's own logs and noise
+3. **Page Load Optimization** buffers logs during page load, sends after completion
+4. **Structured Data** includes timestamp, message, stack trace, page URL, and browser info
+
+### 🌐 Network Request Monitoring
+
+1. **webRequest API** intercepts all HTTP requests from websites
+2. **Comprehensive Capture** records method, URL, headers, payloads, responses, timing
+3. **Intelligent Filtering** excludes images, fonts, analytics, tracking, and encoded noise
+4. **Request Correlation** tracks full request lifecycle from start to completion
+
+### 📊 Data Processing
+
+1. **Batching** efficiently collects 50 items or 5-second intervals
+2. **Local Storage** saves everything to SQLite database (10k item circular buffer)
+3. **LLM-Optimized Output** structures logs with emojis and clear formatting
+4. **Real-time Streaming** provides live updates via Server-Sent Events
+5. **MCP Integration** enables AI assistant access for analysis and debugging
 
 ## Troubleshooting
 
@@ -262,24 +312,25 @@ If `CONSOLE_RELAY_ALLOWED_DOMAINS` is not set, the extension will capture logs f
    - Check that the extension is enabled in `chrome://extensions/`
    - Reload the webpage after installing the extension
    - Check browser console for extension errors
-   - Look for `[Console Relay]` debug messages in the browser console
+   - Look for `[Browser Relay]` debug messages in the browser console
    - Verify the current domain is in your allow-list (if configured)
 
 2. **Debug logging not working**
 
    - Open Chrome DevTools (F12) and go to the Console tab
-   - You should see `[Console Relay] Initialized on domain.com` messages
+   - You should see `[Browser Relay] Initialized on domain.com` messages
    - Try running `console.log("test")` - you should see capture messages
-   - Check the Extensions page and click "service worker" next to Console Relay to see background script logs
+   - Check the Extensions page and click "service worker" next to Browser Relay to see background script logs
 
 3. **Server connection errors**
+
    - Ensure server is running on `http://localhost:8765`
    - Check for CORS errors in browser console
    - Verify no firewall is blocking the connection
    - Check server logs for incoming requests
 
 4. **Domain allow-list issues**
-   - Check if `CONSOLE_RELAY_ALLOWED_DOMAINS` environment variable is set
+   - Check if `ALLOWED_DOMAINS` environment variable is set
    - Verify the current domain matches your allow-list
    - Subdomains are automatically included (e.g., `github.com` includes `gist.github.com`)
 

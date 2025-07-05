@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Console Relay",
+  "name": "Browser Relay",
   "version": "0.1.0",
-  "description": "Relays console logs to local server for development",
-  "permissions": ["storage", "tabs"],
-  "host_permissions": ["http://localhost:8765/*"],
+  "description": "Relays console logs and network requests to local server for development",
+  "permissions": ["storage", "tabs", "webRequest", "webRequestBlocking"],
+  "host_permissions": ["http://localhost:8765/*", "<all_urls>"],
   "action": {
-    "default_title": "Console Relay - Click to view logs"
+    "default_title": "Browser Relay - Click to view logs"
   },
   "background": {
     "service_worker": "background.js"

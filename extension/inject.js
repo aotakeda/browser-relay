@@ -66,6 +66,13 @@
   };
 
   const addLog = (logEntry) => {
+    // Filter out Browser Relay's own logs to avoid noise
+    if (logEntry.message.includes('[Browser Relay]') || 
+        logEntry.message.includes('[Network Debug]') ||
+        logEntry.message.includes('browser-relay')) {
+      return;
+    }
+
     logBuffer.push(logEntry);
 
     // Only send if page is loaded and sending is enabled

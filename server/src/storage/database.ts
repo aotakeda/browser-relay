@@ -24,7 +24,7 @@ if (!fs.existsSync(dataDir)) {
 const isTest = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID;
 const dbPath = isTest 
   ? ':memory:' 
-  : path.join(dataDir, 'console-logs.db');
+  : path.join(dataDir, 'browserrelay.db');
 const db = new sqlite3.Database(dbPath);
 
 // Custom promisify for db.run to preserve 'this' context
@@ -68,6 +68,48 @@ export async function initializeDatabase() {
 
     await runAsync(`
       CREATE INDEX IF NOT EXISTS idx_pageUrl ON logs(pageUrl);
+    `);
+
+    // Create network_requests table
+    await runAsync(`
+      CREATE TABLE IF NOT EXISTS network_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        requestId TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        method TEXT NOT NULL,
+        url TEXT NOT NULL,
+        requestHeaders TEXT,
+        responseHeaders TEXT,
+        requestBody TEXT,
+        responseBody TEXT,
+        statusCode INTEGER,
+        duration INTEGER,
+        responseSize INTEGER,
+        pageUrl TEXT NOT NULL,
+        userAgent TEXT,
+        metadata TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await runAsync(`
+      CREATE INDEX IF NOT EXISTS idx_net_timestamp ON network_requests(timestamp);
+    `);
+
+    await runAsync(`
+      CREATE INDEX IF NOT EXISTS idx_net_method ON network_requests(method);
+    `);
+
+    await runAsync(`
+      CREATE INDEX IF NOT EXISTS idx_net_url ON network_requests(url);
+    `);
+
+    await runAsync(`
+      CREATE INDEX IF NOT EXISTS idx_net_pageUrl ON network_requests(pageUrl);
+    `);
+
+    await runAsync(`
+      CREATE INDEX IF NOT EXISTS idx_net_requestId ON network_requests(requestId);
     `);
 
     logger.info('Database initialized successfully');

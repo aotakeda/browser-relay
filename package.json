@@ -1,5 +1,5 @@
 {
-  "name": "console-relay",
+  "name": "browser-relay",
   "version": "0.1.0",
   "description": "Chrome extension and HTTP/MCP server for capturing console logs",
   "private": true,

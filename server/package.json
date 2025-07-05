@@ -1,5 +1,5 @@
 {
-  "name": "console-relay",
+  "name": "browser-relay",
   "version": "0.1.0",
   "description": "Chrome extension and HTTP/MCP server for relaying console logs locally",
   "main": "dist/index.js",
@@ -22,12 +22,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/aotakeda/console-relay.git"
+    "url": "https://github.com/aotakeda/browser-relay.git"
   },
   "bugs": {
-    "url": "https://github.com/aotakeda/console-relay/issues"
+    "url": "https://github.com/aotakeda/browser-relay/issues"
   },
-  "homepage": "https://github.com/aotakeda/console-relay#readme",
+  "homepage": "https://github.com/aotakeda/browser-relay#readme",
   "author": "Arthur Takeda",
   "license": "MIT",
   "files": [
