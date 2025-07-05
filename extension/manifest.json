@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Console Relay",
+  "version": "0.1.0",
+  "description": "Relays console logs to local server for development",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["http://localhost:8765/*"],
+  "action": {
+    "default_title": "Console Relay - Click to view logs"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "ISOLATED"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

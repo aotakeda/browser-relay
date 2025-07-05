@@ -1,0 +1,24 @@
+{
+  "name": "console-relay",
+  "version": "0.1.0",
+  "description": "Chrome extension and HTTP/MCP server for capturing console logs",
+  "private": true,
+  "workspaces": [
+    "server",
+    "extension"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=server",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces"
+  },
+  "keywords": [
+    "console",
+    "logging",
+    "chrome-extension",
+    "mcp",
+    "developer-tools"
+  ],
+  "author": "",
+  "license": "MIT"
+}

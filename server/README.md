@@ -227,22 +227,6 @@ npm test
 
 - `PORT` - Server port (default: 8765)
 - `MCP_MODE` - Set to "true" to enable MCP server mode
-- `CONSOLE_RELAY_ALLOWED_DOMAINS` - Comma-separated list of domains to capture logs from (if not set, captures from all domains)
-
-### Example Environment Configuration
-
-Create a `.env` file in the server directory:
-
-```bash
-# Server configuration
-PORT=8765
-MCP_MODE=true
-
-# Only capture logs from these domains (optional)
-CONSOLE_RELAY_ALLOWED_DOMAINS=localhost,github.com,stackoverflow.com
-```
-
-If `CONSOLE_RELAY_ALLOWED_DOMAINS` is not set, the extension will capture logs from all websites. When set, it will only capture logs from the specified domains and their subdomains.
 
 ## How It Works
 
@@ -262,26 +246,11 @@ If `CONSOLE_RELAY_ALLOWED_DOMAINS` is not set, the extension will capture logs f
    - Check that the extension is enabled in `chrome://extensions/`
    - Reload the webpage after installing the extension
    - Check browser console for extension errors
-   - Look for `[Console Relay]` debug messages in the browser console
-   - Verify the current domain is in your allow-list (if configured)
 
-2. **Debug logging not working**
-
-   - Open Chrome DevTools (F12) and go to the Console tab
-   - You should see `[Console Relay] Initialized on domain.com` messages
-   - Try running `console.log("test")` - you should see capture messages
-   - Check the Extensions page and click "service worker" next to Console Relay to see background script logs
-
-3. **Server connection errors**
+2. **Server connection errors**
    - Ensure server is running on `http://localhost:8765`
    - Check for CORS errors in browser console
    - Verify no firewall is blocking the connection
-   - Check server logs for incoming requests
-
-4. **Domain allow-list issues**
-   - Check if `CONSOLE_RELAY_ALLOWED_DOMAINS` environment variable is set
-   - Verify the current domain matches your allow-list
-   - Subdomains are automatically included (e.g., `github.com` includes `gist.github.com`)
 
 ### MCP Server Issues
 
