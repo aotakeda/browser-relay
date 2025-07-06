@@ -6,18 +6,18 @@
 
 ## Features
 
-- **🖥️ Console Log Capture**: All console.log, warn, error, and info messages from any website
-- **🌐 Network Request Monitoring**: HTTP requests with headers, payloads, responses, and timing
-- **🤖 LLM-Optimized Output**: Structured JSON logs designed for AI assistant analysis
-- **🧹 Smart Noise Filtering**: Automatically filters out images, tracking, and irrelevant requests
-- **🎯 Domain Filtering**: Capture logs only from specified domains
-- **📊 Local HTTP Server**: Express.js server with SQLite storage (runs on port 27497) - no external connections
-- **🔌 MCP Integration**: Access logs via Model Context Protocol tools in AI assistants (Claude, Cursor, etc.)
-- **⚡ Real-time Streaming**: Server-Sent Events for live log monitoring
-- **💾 Persistent Storage**: Logs and requests saved to local SQLite database
-- **🔄 Circular Buffer**: Automatic cleanup keeps only the latest 10k entries
-- **📦 Batch Processing**: Efficient batching with retry logic and page load optimization
-- **🔒 Privacy First**: All data stays on your machine, zero external connections
+- **Console Log Capture**: All console.log, warn, error, and info messages from any website
+- **Network Request Monitoring**: HTTP requests with headers, payloads, responses, and timing
+- **LLM-Optimized Output**: Structured JSON logs designed for AI assistant analysis
+- **Smart Noise Filtering**: Automatically filters out images, tracking, and irrelevant requests
+- **Domain Filtering**: Capture logs only from specified domains
+- **Local HTTP Server**: Express.js server with SQLite storage (runs on port 27497) - no external connections
+- **MCP Integration**: Access logs via Model Context Protocol tools in AI assistants (Claude, Cursor, etc.)
+- **Real-time Streaming**: Server-Sent Events for live log monitoring
+- **Persistent Storage**: Logs and requests saved to local SQLite database
+- **Circular Buffer**: Automatic cleanup keeps only the latest 10k entries
+- **Batch Processing**: Efficient batching with retry logic and page load optimization
+- **Privacy First**: All data stays on your machine, zero external connections
 
 ## Quick Start
 
@@ -103,7 +103,7 @@ Browser Relay outputs all logs and network requests in structured JSON format fo
 {
   "type": "console_log",
   "level": "info|warn|error",
-  "hostname": "example.com", 
+  "hostname": "example.com",
   "timestamp": "2023-01-01T00:00:00.000Z",
   "page_url": "https://example.com/page",
   "message": "Log message content",
@@ -137,7 +137,7 @@ Browser Relay outputs all logs and network requests in structured JSON format fo
   },
   "response_headers": { "Content-Type": "application/json" },
   "response_body": {
-    "type": "json|text|encoded_data", 
+    "type": "json|text|encoded_data",
     "data": "processed content",
     "truncated": false
   },
@@ -316,43 +316,25 @@ npm start
 npm test
 ```
 
-### Environment Variables
-
-- `MCP_MODE` - Set to "true" to enable MCP server mode at startup (optional - can be enabled via UI)
-- `LOG_CONSOLE_MESSAGES` - Set to "false" to disable console message logging to server output (default: true)
-- `LOG_NETWORK_REQUESTS` - Set to "false" to disable network request logging to server output (default: true)
-
-**Note:** The server runs on port 27497 and is not configurable.
-
-### Example Environment Configuration
-
-Create a `.env` file in the server directory (optional):
-
-```bash
-# Server configuration (all optional)
-MCP_MODE=true  # Enable MCP at startup (can also be enabled via UI)
-
-# Control what gets logged to server output for LLM visibility
-LOG_CONSOLE_MESSAGES=true  # Show console logs in server output
-LOG_NETWORK_REQUESTS=true  # Show network requests in server output
-```
-
 ### UI Configuration
 
-All Browser Relay settings are now managed through the extension popup interface:
+All Browser Relay settings are managed through the extension popup interface:
 
 #### Domain Configuration
+
 - **All Domains Mode**: Captures from all websites (default)
 - **Specific Domains Mode**: Only captures from domains you specify
 - **Add/Remove Domains**: Use the extension popup to manage your domain list
 - **Subdomain Support**: Specified domains automatically include subdomains (e.g., `github.com` includes `gist.github.com`)
 
 #### Capture Controls
+
 - **Console Logs**: Toggle console log capture on/off
 - **Network Requests**: Toggle network request monitoring on/off
 - **MCP Server**: Enable/disable Model Context Protocol for AI assistants
 
 #### Data Management
+
 - **Clear Console Logs**: Remove all stored console logs
 - **Clear Network Requests**: Remove all stored network requests
 
@@ -360,21 +342,21 @@ All settings are saved automatically and persist across browser sessions. No ser
 
 ## How It Works
 
-### 🖥️ Console Log Capture
+### Console Log Capture
 
 1. **Extension** injects scripts that wrap `console.log`, `console.warn`, `console.error`, and `console.info`
 2. **Smart Filtering** automatically excludes Browser Relay's own logs and noise
 3. **Page Load Optimization** buffers logs during page load, sends after completion
 4. **Structured Data** includes timestamp, message, stack trace, page URL, and browser info
 
-### 🌐 Network Request Monitoring
+### Network Request Monitoring
 
 1. **webRequest API** intercepts all HTTP requests from websites
 2. **Comprehensive Capture** records method, URL, headers, payloads, responses, timing
 3. **Intelligent Filtering** excludes images, fonts, analytics, tracking, and encoded noise
 4. **Request Correlation** tracks full request lifecycle from start to completion
 
-### 📊 Data Processing
+### Data Processing
 
 1. **Batching** efficiently collects 50 items or 5-second intervals
 2. **Local Storage** saves everything to SQLite database (10k item circular buffer)
@@ -421,14 +403,17 @@ All settings are saved automatically and persist across browser sessions. No ser
 
 1. **MCP tools not available**
 
-   - Ensure `MCP_MODE=true` environment variable is set
+   - Check that the MCP server is enabled in the extension popup
    - Check that the server built successfully (`npm run build`)
    - Verify the path in Claude config is correct
+   - Check that the server is running and accessible at `http://localhost:27497`
 
 2. **Connection errors**
-   - Restart Claude Code after configuration changes
+   - Check that the server is running and accessible at `http://localhost:27497`
+   - Check that the MCP server is enabled in the extension popup
    - Check server logs for MCP initialization messages
    - Ensure server is running when Claude Code starts
+   - Restart Claude Code after configuration changes
 
 ### Server Issues
 
@@ -455,7 +440,7 @@ This tool is designed with privacy in mind:
 - **100% Local**: No external servers, APIs, or cloud services
 - **No Authentication**: Since it's local-only, no auth is needed
 - **No Tracking**: Zero telemetry or usage tracking
-- **Your Data**: All logs stored locally in `data/console-logs.db`
+- **Your Data**: All logs stored locally in `browser-relay/server/data/browserrelay.db`
 - **Port 27497**: Runs only on localhost, not accessible externally
 
 ## License
