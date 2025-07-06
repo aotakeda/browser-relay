@@ -3,10 +3,11 @@
   "name": "Browser Relay",
   "version": "0.1.0",
   "description": "Relays console logs and network requests to local server for development",
-  "permissions": ["storage", "tabs", "webRequest", "webRequestBlocking"],
+  "permissions": ["storage", "tabs", "webRequest"],
   "host_permissions": ["http://localhost:*/*", "<all_urls>"],
   "action": {
-    "default_title": "Browser Relay - Click to view logs"
+    "default_title": "Browser Relay - Click to view logs",
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js"

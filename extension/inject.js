@@ -13,6 +13,8 @@
   let batchTimer = null;
   const _pageLoaded = false;
   let sendingEnabled = false;
+  let logsEnabled = true;
+  let shouldCaptureDomain = true;
 
   // Store original console methods to avoid infinite loops
   const _originalConsole = {
@@ -48,7 +50,7 @@
   });
 
   const sendLogs = () => {
-    if (logBuffer.length === 0 || !sendingEnabled) return;
+    if (logBuffer.length === 0 || !sendingEnabled || !logsEnabled || !shouldCaptureDomain) return;
 
     const logsToSend = [...logBuffer];
     logBuffer = [];
@@ -70,6 +72,11 @@
     if (logEntry.message.includes('[Browser Relay]') || 
         logEntry.message.includes('[Network Debug]') ||
         logEntry.message.includes('browser-relay')) {
+      return;
+    }
+
+    // Don't capture logs if log capture is disabled or domain not allowed
+    if (!logsEnabled || !shouldCaptureDomain) {
       return;
     }
 
@@ -113,36 +120,6 @@
   // Initialize server check
   checkServer();
   
-  // Check domain allowlist via fetch
-  const checkDomainAllowed = async () => {
-    try {
-      const response = await fetch('http://localhost:27497/allowed-domains');
-      
-      if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      const allowedDomains = data.domains || [];
-      const isAllowListEnabled = data.enabled || false;
-      
-      if (isAllowListEnabled && allowedDomains.length > 0) {
-        const currentDomain = window.location.hostname;
-        const isAllowed = allowedDomains.some(domain => 
-          currentDomain === domain || currentDomain.endsWith('.' + domain)
-        );
-        
-        if (!isAllowed) {
-          return false;
-        }
-      }
-      
-      return true;
-    } catch {
-      return true;
-    }
-  };
-
   // Wrap console methods
   const wrapConsoleMethod = (method, level) => {
     const original = console[method];
@@ -171,23 +148,37 @@
     }
   };
 
-  // Initialize after checking domain
-  checkDomainAllowed().then(shouldCapture => {
-    if (shouldCapture) {
-      // Start capturing logs immediately
-      wrapConsoleMethod("log", "log");
-      wrapConsoleMethod("warn", "warn");
-      wrapConsoleMethod("error", "error");
-      wrapConsoleMethod("info", "info");
-
-      // Enable sending after page load
-      if (document.readyState === 'complete') {
-        enableSending();
-      } else {
-        window.addEventListener('load', enableSending);
+  // Listen for settings changes from content script
+  window.addEventListener('message', (event) => {
+    if (event.source !== window || event.data.type !== 'CONSOLE_RELAY_SETTINGS') {
+      return;
+    }
+    
+    logsEnabled = event.data.logsEnabled;
+    shouldCaptureDomain = event.data.shouldCapture;
+    
+    // If capture is disabled (logs or domain), clear any buffered logs
+    if (!logsEnabled || !shouldCaptureDomain) {
+      logBuffer = [];
+      if (batchTimer) {
+        clearTimeout(batchTimer);
+        batchTimer = null;
       }
     }
   });
+
+  // Initialize console method wrapping immediately
+  wrapConsoleMethod("log", "log");
+  wrapConsoleMethod("warn", "warn");
+  wrapConsoleMethod("error", "error");
+  wrapConsoleMethod("info", "info");
+
+  // Enable sending after page load
+  if (document.readyState === 'complete') {
+    enableSending();
+  } else {
+    window.addEventListener('load', enableSending);
+  }
 
   // Send any remaining logs when page unloads
   window.addEventListener("beforeunload", () => {

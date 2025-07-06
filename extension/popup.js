@@ -1,0 +1,461 @@
+// Popup script for Browser Relay extension
+(async () => {
+  const loadingEl = document.getElementById("loading");
+  const contentEl = document.getElementById("content");
+  const statusEl = document.getElementById("status");
+  const statusTextEl = document.getElementById("status-text");
+  const domainModeToggleEl = document.getElementById("domain-mode-toggle");
+  const specificDomainsEl = document.getElementById("specific-domains");
+  const allDomainsTextEl = document.getElementById("all-domains-text");
+  const domainInputEl = document.getElementById("domain-input");
+  const addDomainBtnEl = document.getElementById("add-domain-btn");
+  const domainsListEl = document.getElementById("domains-list");
+  const logsToggleEl = document.getElementById("logs-toggle");
+  const networkToggleEl = document.getElementById("network-toggle");
+  const mcpToggleEl = document.getElementById("mcp-toggle");
+  const clearLogsBtn = document.getElementById("clear-logs");
+  const clearNetworkBtn = document.getElementById("clear-network");
+
+  let logsEnabled = true;
+  let networkEnabled = true;
+  let mcpEnabled = false; // Default to false for MCP mode
+  let isConnected = false;
+  let allDomainsMode = true; // true = all domains, false = specific domains
+  let specificDomains = []; // array of domain strings
+
+  // Show loading initially
+  loadingEl.style.display = "flex";
+  contentEl.style.display = "none";
+
+  // Load current state
+  const loadState = async () => {
+    try {
+      // Get current enabled states and domain configuration from storage
+      const result = await chrome.storage.local.get([
+        "logsEnabled",
+        "networkEnabled",
+        "mcpEnabled",
+        "allDomainsMode",
+        "specificDomains",
+      ]);
+
+      logsEnabled = result.logsEnabled !== false; // default to true
+      networkEnabled = result.networkEnabled !== false; // default to true
+      mcpEnabled = result.mcpEnabled === true; // default to false for MCP
+      allDomainsMode = result.allDomainsMode !== false; // default to true
+      specificDomains = result.specificDomains || []; // default to empty array
+
+      // Check server connection
+      try {
+        const response = await fetch(
+          "http://localhost:27497/health-browser-relay",
+          {
+            method: "GET",
+            signal: AbortSignal.timeout(3000),
+          }
+        );
+        isConnected = response.ok;
+      } catch {
+        isConnected = false;
+      }
+
+      updateUI();
+    } catch (error) {
+      console.error("Error loading state:", error);
+      updateUI();
+    }
+  };
+
+  // Domain management functions
+  const saveDomainSettings = async () => {
+    await chrome.storage.local.set({
+      allDomainsMode,
+      specificDomains,
+    });
+
+    // Notify background script of domain changes
+    await chrome.runtime.sendMessage({
+      type: "DOMAIN_SETTINGS_CHANGED",
+      allDomainsMode,
+      specificDomains,
+    });
+  };
+
+  const addDomain = async () => {
+    const domain = domainInputEl.value.trim().toLowerCase();
+    if (!domain) return;
+
+    // Basic domain validation
+    if (
+      !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(
+        domain
+      )
+    ) {
+      domainInputEl.style.borderColor = "rgba(255, 107, 107, 0.5)";
+      setTimeout(() => {
+        domainInputEl.style.borderColor = "";
+      }, 2000);
+      return;
+    }
+
+    if (specificDomains.includes(domain)) {
+      domainInputEl.value = "";
+      return;
+    }
+
+    specificDomains.push(domain);
+    domainInputEl.value = "";
+    await saveDomainSettings();
+    updateDomainsDisplay();
+  };
+
+  const removeDomain = async (domain) => {
+    specificDomains = specificDomains.filter((d) => d !== domain);
+    await saveDomainSettings();
+    updateDomainsDisplay();
+  };
+
+  const toggleDomainMode = async () => {
+    allDomainsMode = !allDomainsMode;
+    await saveDomainSettings();
+    updateDomainsDisplay();
+  };
+
+  // Update domains display
+  const updateDomainsDisplay = () => {
+    // Update mode toggle
+    domainModeToggleEl.className = "toggle-small";
+    if (!allDomainsMode) {
+      domainModeToggleEl.classList.add("enabled");
+    }
+    domainModeToggleEl.setAttribute(
+      "aria-checked",
+      (!allDomainsMode).toString()
+    );
+
+    // Update toggle labels
+    const labels = document.querySelectorAll(".toggle-label-small");
+    labels[0].className = allDomainsMode
+      ? "toggle-label-small active"
+      : "toggle-label-small";
+    labels[1].className = !allDomainsMode
+      ? "toggle-label-small active"
+      : "toggle-label-small";
+
+    // Show/hide appropriate sections
+    if (allDomainsMode) {
+      specificDomainsEl.style.display = "none";
+      allDomainsTextEl.style.display = "block";
+    } else {
+      specificDomainsEl.style.display = "block";
+      allDomainsTextEl.style.display = "none";
+
+      // Update domains list
+      domainsListEl.innerHTML = specificDomains
+        .map(
+          (domain) => `
+          <div class="domain-tag">
+            ${domain}
+            <span class="domain-remove" data-domain="${domain}">×</span>
+          </div>
+        `
+        )
+        .join("");
+    }
+  };
+
+  // Update UI based on current state
+  const updateUI = () => {
+    // Hide loading, show content
+    loadingEl.style.display = "none";
+    contentEl.style.display = "block";
+
+    // Update domains display
+    updateDomainsDisplay();
+
+    // Update status
+    statusEl.className = "status";
+    if (!isConnected) {
+      statusEl.classList.add("disconnected");
+      statusTextEl.textContent = "Server disconnected";
+    } else if (!logsEnabled && !networkEnabled) {
+      statusEl.classList.add("paused");
+      statusTextEl.textContent = "All capture disabled";
+    } else if (!logsEnabled) {
+      statusEl.classList.add("paused");
+      statusTextEl.textContent = "Console logs disabled";
+    } else if (!networkEnabled) {
+      statusEl.classList.add("paused");
+      statusTextEl.textContent = "Network requests disabled";
+    } else {
+      statusEl.classList.add("active");
+      statusTextEl.textContent = "Capturing logs & network";
+    }
+
+    // Update logs toggle
+    logsToggleEl.className = "toggle";
+    if (logsEnabled) {
+      logsToggleEl.classList.add("enabled");
+    }
+    logsToggleEl.setAttribute("aria-checked", logsEnabled.toString());
+
+    // Update network toggle
+    networkToggleEl.className = "toggle";
+    if (networkEnabled) {
+      networkToggleEl.classList.add("enabled");
+    }
+    networkToggleEl.setAttribute("aria-checked", networkEnabled.toString());
+
+    // Update MCP toggle
+    mcpToggleEl.className = "toggle";
+    if (mcpEnabled) {
+      mcpToggleEl.classList.add("enabled");
+    }
+    mcpToggleEl.setAttribute("aria-checked", mcpEnabled.toString());
+
+    // Disable toggles if not connected
+    const toggleOpacity = isConnected ? "1" : "0.5";
+    const toggleCursor = isConnected ? "pointer" : "not-allowed";
+
+    logsToggleEl.style.opacity = toggleOpacity;
+    logsToggleEl.style.cursor = toggleCursor;
+    networkToggleEl.style.opacity = toggleOpacity;
+    networkToggleEl.style.cursor = toggleCursor;
+    mcpToggleEl.style.opacity = toggleOpacity;
+    mcpToggleEl.style.cursor = toggleCursor;
+
+    // Disable clear buttons if not connected
+    clearLogsBtn.disabled = !isConnected;
+    clearNetworkBtn.disabled = !isConnected;
+
+    const buttonOpacity = isConnected ? "1" : "0.5";
+    const buttonCursor = isConnected ? "pointer" : "not-allowed";
+
+    clearLogsBtn.style.opacity = buttonOpacity;
+    clearLogsBtn.style.cursor = buttonCursor;
+    clearNetworkBtn.style.opacity = buttonOpacity;
+    clearNetworkBtn.style.cursor = buttonCursor;
+  };
+
+  // Toggle logs capture state
+  const toggleLogs = async () => {
+    if (!isConnected) return;
+
+    try {
+      logsEnabled = !logsEnabled;
+
+      // Save to storage
+      await chrome.storage.local.set({ logsEnabled });
+
+      // Notify background script
+      await chrome.runtime.sendMessage({
+        type: "TOGGLE_LOGS",
+        enabled: logsEnabled,
+      });
+
+      updateUI();
+    } catch (error) {
+      console.error("Error toggling logs:", error);
+      // Revert state on error
+      logsEnabled = !logsEnabled;
+      updateUI();
+    }
+  };
+
+  // Toggle network capture state
+  const toggleNetwork = async () => {
+    if (!isConnected) return;
+
+    try {
+      networkEnabled = !networkEnabled;
+
+      // Save to storage
+      await chrome.storage.local.set({ networkEnabled });
+
+      // Notify background script
+      await chrome.runtime.sendMessage({
+        type: "TOGGLE_NETWORK",
+        enabled: networkEnabled,
+      });
+
+      updateUI();
+    } catch (error) {
+      console.error("Error toggling network:", error);
+      // Revert state on error
+      networkEnabled = !networkEnabled;
+      updateUI();
+    }
+  };
+
+  // Toggle MCP mode
+  const toggleMCP = async () => {
+    if (!isConnected) return;
+
+    try {
+      mcpEnabled = !mcpEnabled;
+
+      // Save to storage
+      await chrome.storage.local.set({ mcpEnabled });
+
+      // Notify background script to inform server
+      await chrome.runtime.sendMessage({
+        type: "TOGGLE_MCP",
+        enabled: mcpEnabled,
+      });
+
+      updateUI();
+    } catch (error) {
+      console.error("Error toggling MCP:", error);
+      // Revert state on error
+      mcpEnabled = !mcpEnabled;
+      updateUI();
+    }
+  };
+
+  // Clear console logs
+  const clearLogs = async () => {
+    if (!isConnected) return;
+
+    try {
+      // Show loading state
+      clearLogsBtn.textContent = "Clearing...";
+      clearLogsBtn.disabled = true;
+
+      // Clear logs on server
+      const response = await fetch("http://localhost:27497/logs", {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        // Show success feedback
+        clearLogsBtn.textContent = "Cleared!";
+        setTimeout(() => {
+          clearLogsBtn.textContent = "Clear Console Logs";
+          clearLogsBtn.disabled = false;
+        }, 1000);
+      } else {
+        throw new Error("Failed to clear logs");
+      }
+    } catch (error) {
+      console.error("Error clearing logs:", error);
+      clearLogsBtn.textContent = "Error";
+      setTimeout(() => {
+        clearLogsBtn.textContent = "Clear Console Logs";
+        clearLogsBtn.disabled = false;
+      }, 1000);
+    }
+  };
+
+  // Clear network requests
+  const clearNetwork = async () => {
+    if (!isConnected) return;
+
+    try {
+      // Show loading state
+      clearNetworkBtn.textContent = "Clearing...";
+      clearNetworkBtn.disabled = true;
+
+      // Clear network requests on server
+      const response = await fetch("http://localhost:27497/network-requests", {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        // Show success feedback
+        clearNetworkBtn.textContent = "Cleared!";
+        setTimeout(() => {
+          clearNetworkBtn.textContent = "Clear Network Requests";
+          clearNetworkBtn.disabled = false;
+        }, 1000);
+      } else {
+        throw new Error("Failed to clear network requests");
+      }
+    } catch (error) {
+      console.error("Error clearing network requests:", error);
+      clearNetworkBtn.textContent = "Error";
+      setTimeout(() => {
+        clearNetworkBtn.textContent = "Clear Network Requests";
+        clearNetworkBtn.disabled = false;
+      }, 1000);
+    }
+  };
+
+  // Event listeners
+  logsToggleEl.addEventListener("click", toggleLogs);
+  logsToggleEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleLogs();
+    }
+  });
+
+  networkToggleEl.addEventListener("click", toggleNetwork);
+  networkToggleEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleNetwork();
+    }
+  });
+
+  mcpToggleEl.addEventListener("click", toggleMCP);
+  mcpToggleEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleMCP();
+    }
+  });
+
+  clearLogsBtn.addEventListener("click", clearLogs);
+  clearNetworkBtn.addEventListener("click", clearNetwork);
+
+  // Domain management event listeners
+  domainModeToggleEl.addEventListener("click", toggleDomainMode);
+  domainModeToggleEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleDomainMode();
+    }
+  });
+
+  addDomainBtnEl.addEventListener("click", addDomain);
+
+  domainInputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      addDomain();
+    }
+  });
+
+  // Event delegation for domain removal
+  domainsListEl.addEventListener("click", (e) => {
+    if (e.target.classList.contains("domain-remove")) {
+      const domain = e.target.getAttribute("data-domain");
+      removeDomain(domain);
+    }
+  });
+
+  // Load initial state
+  await loadState();
+
+  // Refresh connection status every 5 seconds
+  setInterval(async () => {
+    try {
+      const response = await fetch(
+        "http://localhost:27497/health-browser-relay",
+        {
+          method: "GET",
+          signal: AbortSignal.timeout(2000),
+        }
+      );
+      const newConnected = response.ok;
+      if (newConnected !== isConnected) {
+        isConnected = newConnected;
+        updateUI();
+      }
+    } catch {
+      if (isConnected) {
+        isConnected = false;
+        updateUI();
+      }
+    }
+  }, 5000);
+})();

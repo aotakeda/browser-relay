@@ -9,12 +9,32 @@ let retryCount = 0;
 let sessionId = null;
 let networkRequestsBuffer = [];
 const pendingRequests = new Map(); // requestId -> request data
+let logsEnabled = true; // Default to enabled
+let networkEnabled = true; // Default to enabled
+let mcpEnabled = false; // Default to disabled for MCP
+let allDomainsMode = true; // Default to all domains
+let specificDomains = []; // Default to empty array
 
 // Generate session ID on installation
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   sessionId = `session_${Date.now()}_${Math.random()
     .toString(36)
     .substr(2, 9)}`;
+  
+  // Load all settings from storage
+  const result = await chrome.storage.local.get([
+    'logsEnabled', 
+    'networkEnabled', 
+    'mcpEnabled',
+    'allDomainsMode', 
+    'specificDomains'
+  ]);
+  
+  logsEnabled = result.logsEnabled !== false; // default to true
+  networkEnabled = result.networkEnabled !== false; // default to true
+  mcpEnabled = result.mcpEnabled === true; // default to false for MCP
+  allDomainsMode = result.allDomainsMode !== false; // default to true
+  specificDomains = result.specificDomains || []; // default to empty array
 });
 
 // Simple server health check - only check port 27497
@@ -69,6 +89,11 @@ const sendLogsToServer = async (logs) => {
 };
 
 const sendLogsWithRetry = async (logs) => {
+  // Don't send logs if log capture is disabled
+  if (!logsEnabled) {
+    return;
+  }
+  
   try {
     await sendLogsToServer(logs);
   } catch {
@@ -109,6 +134,11 @@ const sendNetworkRequestsToServer = async (requests) => {
 };
 
 const sendNetworkRequestsWithRetry = async (requests) => {
+  // Don't send network requests if network capture is disabled
+  if (!networkEnabled) {
+    return;
+  }
+  
   try {
     await sendNetworkRequestsToServer(requests);
   } catch {
@@ -124,6 +154,27 @@ const flushNetworkRequests = () => {
   }
 };
 
+// Check if domain should be captured based on UI configuration
+const shouldCaptureDomain = (url) => {
+  // Always capture if in all domains mode
+  if (allDomainsMode) {
+    return true;
+  }
+  
+  // Extract hostname from URL
+  let hostname;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    return false;
+  }
+  
+  // Check if hostname matches any specific domain (including subdomains)
+  return specificDomains.some(domain => 
+    hostname === domain || hostname.endsWith('.' + domain)
+  );
+};
+
 // Filter out noise from network requests
 const shouldCaptureRequest = (url) => {
   // Skip extension URLs
@@ -136,6 +187,11 @@ const shouldCaptureRequest = (url) => {
 
   // Skip Browser Relay's own health check requests for port detection
   if (url.includes("localhost:") && url.includes("/health-browser-relay")) {
+    return false;
+  }
+
+  // Check domain filtering first
+  if (!shouldCaptureDomain(url)) {
     return false;
   }
 
@@ -167,7 +223,78 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendLogsWithRetry(message.logs);
     sendResponse({ received: true });
   } else if (message.type === "CONTENT_SCRIPT_READY") {
-    sendResponse({ sessionId });
+    sendResponse({ sessionId, logsEnabled, networkEnabled, mcpEnabled, allDomainsMode, specificDomains });
+  } else if (message.type === "DOMAIN_SETTINGS_CHANGED") {
+    allDomainsMode = message.allDomainsMode;
+    specificDomains = message.specificDomains;
+    
+    // Notify all content scripts of the domain setting changes
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'DOMAIN_SETTINGS_CHANGED',
+          allDomainsMode,
+          specificDomains
+        }).catch(() => {
+          // Ignore errors for tabs that don't have content scripts
+        });
+      });
+    });
+    
+    sendResponse({ success: true });
+  } else if (message.type === "TOGGLE_LOGS") {
+    logsEnabled = message.enabled;
+    // Store in local storage
+    chrome.storage.local.set({ logsEnabled });
+    
+    // Notify all content scripts of the state change
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'LOGS_STATE_CHANGED',
+          enabled: logsEnabled
+        }).catch(() => {
+          // Ignore errors for tabs that don't have content scripts
+        });
+      });
+    });
+    
+    sendResponse({ success: true });
+  } else if (message.type === "TOGGLE_NETWORK") {
+    networkEnabled = message.enabled;
+    // Store in local storage
+    chrome.storage.local.set({ networkEnabled });
+    
+    // Notify all content scripts of the state change
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'NETWORK_STATE_CHANGED',
+          enabled: networkEnabled
+        }).catch(() => {
+          // Ignore errors for tabs that don't have content scripts
+        });
+      });
+    });
+    
+    sendResponse({ success: true });
+  } else if (message.type === "TOGGLE_MCP") {
+    mcpEnabled = message.enabled;
+    // Store in local storage
+    chrome.storage.local.set({ mcpEnabled });
+    
+    // Send MCP setting to server
+    fetch('http://localhost:27497/mcp-config', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ mcpEnabled })
+    }).catch(() => {
+      // Silently fail if server is not available
+    });
+    
+    sendResponse({ success: true });
   }
 
   return true; // Keep message channel open for async response
@@ -176,7 +303,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Network request capture
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
-    if (!shouldCaptureRequest(details.url)) return;
+    if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
 
     const requestData = {
       requestId: details.requestId,
@@ -198,7 +325,7 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 chrome.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
-    if (!shouldCaptureRequest(details.url)) return;
+    if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
 
     const requestData = pendingRequests.get(details.requestId);
     if (requestData) {
@@ -215,7 +342,7 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
 
 chrome.webRequest.onHeadersReceived.addListener(
   (details) => {
-    if (!shouldCaptureRequest(details.url)) return;
+    if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
 
     const requestData = pendingRequests.get(details.requestId);
     if (requestData) {
@@ -233,7 +360,7 @@ chrome.webRequest.onHeadersReceived.addListener(
 
 chrome.webRequest.onCompleted.addListener(
   (details) => {
-    if (!shouldCaptureRequest(details.url)) return;
+    if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
 
     const requestData = pendingRequests.get(details.requestId);
     if (requestData) {
@@ -263,7 +390,7 @@ chrome.webRequest.onCompleted.addListener(
 
 chrome.webRequest.onErrorOccurred.addListener(
   (details) => {
-    if (!shouldCaptureRequest(details.url)) return;
+    if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
 
     const requestData = pendingRequests.get(details.requestId);
     if (requestData) {

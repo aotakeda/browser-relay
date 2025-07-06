@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        width: 320px;
+        padding: 20px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        font-size: 14px;
+        margin: 0;
+        background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+        color: #e0e0e0;
+        min-height: 400px;
+        box-sizing: border-box;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 24px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .icon {
+        width: 24px;
+        height: 24px;
+        margin-right: 12px;
+        filter: brightness(1.2);
+      }
+
+      .title {
+        font-weight: 700;
+        font-size: 18px;
+        color: #ffffff;
+        letter-spacing: -0.025em;
+      }
+
+      .status {
+        display: flex;
+        align-items: center;
+        margin-bottom: 24px;
+        padding: 12px 16px;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 500;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .status.active {
+        background: linear-gradient(
+          135deg,
+          rgba(26, 61, 26, 0.8) 0%,
+          rgba(45, 90, 45, 0.6) 100%
+        );
+        color: #7dd87d;
+        border-color: rgba(125, 216, 125, 0.3);
+      }
+
+      .status.paused {
+        background: linear-gradient(
+          135deg,
+          rgba(61, 61, 26, 0.8) 0%,
+          rgba(133, 100, 4, 0.6) 100%
+        );
+        color: #f0d060;
+        border-color: rgba(240, 208, 96, 0.3);
+      }
+
+      .status.disconnected {
+        background: linear-gradient(
+          135deg,
+          rgba(61, 26, 26, 0.8) 0%,
+          rgba(114, 28, 36, 0.6) 100%
+        );
+        color: #ff8080;
+        border-color: rgba(255, 128, 128, 0.3);
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 12px;
+        position: relative;
+        animation: pulse 2s infinite;
+      }
+
+      .status.active .status-dot {
+        background-color: #7dd87d;
+        box-shadow: 0 0 8px rgba(125, 216, 125, 0.6);
+      }
+
+      .status.paused .status-dot {
+        background-color: #f0d060;
+        box-shadow: 0 0 8px rgba(240, 208, 96, 0.6);
+      }
+
+      .status.disconnected .status-dot {
+        background-color: #ff8080;
+        box-shadow: 0 0 8px rgba(255, 128, 128, 0.6);
+        animation: none;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.7;
+          transform: scale(1.1);
+        }
+      }
+
+      .domains-section {
+        margin-bottom: 24px;
+        padding: 16px 20px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        backdrop-filter: blur(10px);
+      }
+
+      .domains-header {
+        margin-bottom: 12px;
+      }
+
+      .domains-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #ffffff;
+      }
+
+      .domains-content {
+        color: #b0b0b0;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      .domains-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .domain-tag {
+        padding: 4px 8px;
+        background: rgba(74, 144, 226, 0.15);
+        border: 1px solid rgba(74, 144, 226, 0.3);
+        border-radius: 8px;
+        font-size: 12px;
+        color: #6bb8ff;
+        font-weight: 500;
+      }
+
+      .domains-all {
+        color: #7dd87d;
+        font-weight: 500;
+      }
+
+      .domain-mode-toggle {
+        margin-bottom: 16px;
+      }
+
+      .toggle-container-small {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 8px 0;
+      }
+
+      .toggle-label-small {
+        font-size: 12px;
+        font-weight: 500;
+        color: #b0b0b0;
+        transition: color 0.3s ease;
+      }
+
+      .toggle-label-small.active {
+        color: #ffffff;
+      }
+
+      .toggle-small {
+        position: relative;
+        width: 48px;
+        height: 20px;
+        background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+      }
+
+      .toggle-small.enabled {
+        background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+        border-color: rgba(74, 144, 226, 0.5);
+        box-shadow: 0 0 15px rgba(74, 144, 226, 0.3),
+          inset 0 1px 2px rgba(255, 255, 255, 0.2);
+      }
+
+      .toggle-small::before {
+        content: "";
+        position: absolute;
+        top: 1px;
+        left: 1px;
+        width: 16px;
+        height: 16px;
+        background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+        border-radius: 50%;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .toggle-small.enabled::before {
+        transform: translateX(26px);
+        background: linear-gradient(135deg, #ffffff 0%, #e8f4ff 100%);
+        box-shadow: 0 2px 6px rgba(74, 144, 226, 0.4),
+          0 1px 3px rgba(0, 0, 0, 0.2);
+        border-color: rgba(255, 255, 255, 0.8);
+      }
+
+      .specific-domains {
+        margin-top: 12px;
+      }
+
+      .domain-input-container {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .domain-input {
+        flex: 1;
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        color: #ffffff;
+        font-size: 13px;
+        transition: all 0.3s ease;
+      }
+
+      .domain-input:focus {
+        outline: none;
+        border-color: rgba(74, 144, 226, 0.5);
+        background: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+      }
+
+      .domain-input::placeholder {
+        color: #666666;
+      }
+
+      .add-domain-btn {
+        width: 32px;
+        height: 32px;
+        border: 1px solid rgba(74, 144, 226, 0.3);
+        border-radius: 8px;
+        background: linear-gradient(
+          135deg,
+          rgba(74, 144, 226, 0.2) 0%,
+          rgba(53, 122, 189, 0.2) 100%
+        );
+        color: #4a90e2;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .add-domain-btn:hover {
+        background: linear-gradient(
+          135deg,
+          rgba(74, 144, 226, 0.3) 0%,
+          rgba(53, 122, 189, 0.3) 100%
+        );
+        border-color: rgba(74, 144, 226, 0.5);
+        transform: scale(1.05);
+      }
+
+      .add-domain-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .domains-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .domain-tag {
+        padding: 6px 12px;
+        background: rgba(74, 144, 226, 0.15);
+        border: 1px solid rgba(74, 144, 226, 0.3);
+        border-radius: 12px;
+        font-size: 12px;
+        color: #6bb8ff;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.3s ease;
+      }
+
+      .domain-tag:hover {
+        background: rgba(74, 144, 226, 0.2);
+        border-color: rgba(74, 144, 226, 0.4);
+      }
+
+      .domain-remove {
+        cursor: pointer;
+        color: #ff6b6b;
+        font-weight: bold;
+        font-size: 14px;
+        transition: color 0.3s ease;
+      }
+
+      .domain-remove:hover {
+        color: #ff8080;
+      }
+
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .button-group {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .toggle-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+      }
+
+      .toggle-container:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.15);
+        transform: translateY(-1px);
+      }
+
+      .toggle-label {
+        font-weight: 600;
+        color: #ffffff;
+        font-size: 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .toggle-subtitle {
+        font-size: 11px;
+        font-weight: 400;
+        color: #888888;
+        line-height: 1.2;
+      }
+
+      .toggle {
+        position: relative;
+        width: 52px;
+        height: 28px;
+        background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+        border-radius: 14px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      .toggle.enabled {
+        background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+        border-color: rgba(74, 144, 226, 0.5);
+        box-shadow: 0 0 20px rgba(74, 144, 226, 0.3),
+          inset 0 1px 3px rgba(255, 255, 255, 0.2);
+      }
+
+      .toggle::before {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 22px;
+        height: 22px;
+        background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+        border-radius: 50%;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .toggle.enabled::before {
+        transform: translateX(24px);
+        background: linear-gradient(135deg, #ffffff 0%, #e8f4ff 100%);
+        box-shadow: 0 4px 12px rgba(74, 144, 226, 0.4),
+          0 2px 6px rgba(0, 0, 0, 0.2);
+        border-color: rgba(255, 255, 255, 0.8);
+      }
+
+      .button {
+        padding: 14px 20px;
+        border: 2px solid rgba(255, 107, 107, 0.3);
+        border-radius: 12px;
+        background: linear-gradient(
+          135deg,
+          rgba(26, 26, 26, 0.8) 0%,
+          rgba(42, 42, 42, 0.6) 100%
+        );
+        color: #ff6b6b;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .button:hover {
+        background: linear-gradient(
+          135deg,
+          rgba(42, 26, 26, 0.9) 0%,
+          rgba(60, 30, 30, 0.7) 100%
+        );
+        border-color: rgba(255, 128, 128, 0.5);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(255, 107, 107, 0.2);
+      }
+
+      .button:active {
+        transform: translateY(0);
+        box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+      }
+
+      .button.danger {
+        color: #ff6b6b;
+        border-color: rgba(255, 107, 107, 0.3);
+      }
+
+      .button.danger:hover {
+        color: #ff8080;
+        border-color: rgba(255, 128, 128, 0.5);
+      }
+
+      .footer {
+        margin-top: 32px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        text-align: center;
+      }
+
+      .footer a {
+        color: #4a90e2;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        position: relative;
+      }
+
+      .footer a:hover {
+        color: #6bb8ff;
+        text-shadow: 0 0 8px rgba(74, 144, 226, 0.4);
+      }
+
+      .footer a::after {
+        content: "";
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        width: 0;
+        height: 1px;
+        background: linear-gradient(90deg, #4a90e2, #6bb8ff);
+        transition: width 0.3s ease;
+      }
+
+      .footer a:hover::after {
+        width: 100%;
+      }
+
+      .loading {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .spinner {
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(255, 255, 255, 0.1);
+        border-top: 3px solid #4a90e2;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <img src="icons/icon16.png" alt="Browser Relay" class="icon" />
+      <div class="title">Browser Relay</div>
+    </div>
+
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+    </div>
+
+    <div id="content" style="display: none">
+      <div id="status" class="status">
+        <div class="status-dot"></div>
+        <span id="status-text">Checking connection...</span>
+      </div>
+
+      <div id="domains-section" class="domains-section">
+        <div class="domains-header">
+          <span class="domains-title">Domains being watched</span>
+        </div>
+
+        <div class="domain-mode-toggle">
+          <div class="toggle-container toggle-container-small">
+            <span class="toggle-label-small">All Domains</span>
+            <div
+              id="domain-mode-toggle"
+              class="toggle toggle-small"
+              role="switch"
+              aria-checked="true"
+              tabindex="0"
+            ></div>
+            <span class="toggle-label-small">Specific Domains</span>
+          </div>
+        </div>
+
+        <div
+          id="specific-domains"
+          class="specific-domains"
+          style="display: none"
+        >
+          <div class="domain-input-container">
+            <input
+              type="text"
+              id="domain-input"
+              placeholder="Enter domain (e.g., github.com)"
+              class="domain-input"
+            />
+            <button id="add-domain-btn" class="add-domain-btn">+</button>
+          </div>
+          <div id="domains-list" class="domains-list"></div>
+        </div>
+
+        <div id="all-domains-text" class="domains-content">
+          <span class="domains-all">Capturing from all domains</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="toggle-container">
+          <div class="toggle-label">Console Logs</div>
+          <div
+            id="logs-toggle"
+            class="toggle"
+            role="switch"
+            aria-checked="true"
+            tabindex="0"
+          ></div>
+        </div>
+
+        <div class="toggle-container">
+          <div class="toggle-label">Network Requests</div>
+          <div
+            id="network-toggle"
+            class="toggle"
+            role="switch"
+            aria-checked="true"
+            tabindex="0"
+          ></div>
+        </div>
+
+        <div class="toggle-container">
+          <div class="toggle-label">MCP Server</div>
+          <div
+            id="mcp-toggle"
+            class="toggle"
+            role="switch"
+            aria-checked="false"
+            tabindex="0"
+          ></div>
+        </div>
+
+        <div class="button-group">
+          <button id="clear-logs" class="button danger">
+            Clear Console Logs
+          </button>
+          <button id="clear-network" class="button danger">
+            Clear Network Requests
+          </button>
+        </div>
+      </div>
+
+      <div class="footer">
+        <a href="https://github.com/aotakeda/browser-relay" target="_blank"
+          >Star Browser Relay on GitHub</a
+        >
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

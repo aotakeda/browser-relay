@@ -1,8 +1,29 @@
 // This content script runs in ISOLATED world and can communicate with background script
 (() => {
+  let logsEnabled = true;
+  let allDomainsMode = true;
+  let specificDomains = [];
+
+  // Check if current domain should be captured
+  const shouldCaptureDomain = () => {
+    if (allDomainsMode) {
+      return true;
+    }
+
+    const hostname = window.location.hostname;
+    return specificDomains.some(
+      (domain) => hostname === domain || hostname.endsWith("." + domain)
+    );
+  };
+
   // Listen for logs from the main world script
-  window.addEventListener('message', async (event) => {
-    if (event.source !== window || event.data.type !== 'CONSOLE_RELAY_LOGS') {
+  window.addEventListener("message", async (event) => {
+    if (event.source !== window || event.data.type !== "CONSOLE_RELAY_LOGS") {
+      return;
+    }
+
+    // Don't send logs if log capture is disabled or domain not allowed
+    if (!logsEnabled || !shouldCaptureDomain()) {
       return;
     }
 
@@ -18,6 +39,50 @@
     }
   });
 
-  // Initial heartbeat
-  chrome.runtime.sendMessage({ type: "CONTENT_SCRIPT_READY" }).catch(() => {});
+  // Notify inject script of current settings
+  const notifyInjectScript = () => {
+    window.postMessage(
+      {
+        type: "CONSOLE_RELAY_SETTINGS",
+        logsEnabled,
+        allDomainsMode,
+        specificDomains,
+        shouldCapture: shouldCaptureDomain(),
+      },
+      "*"
+    );
+  };
+
+  // Initial heartbeat and get capture states
+  chrome.runtime
+    .sendMessage({ type: "CONTENT_SCRIPT_READY" })
+    .then((response) => {
+      if (response) {
+        if (typeof response.logsEnabled === "boolean") {
+          logsEnabled = response.logsEnabled;
+        }
+        if (typeof response.allDomainsMode === "boolean") {
+          allDomainsMode = response.allDomainsMode;
+        }
+        if (Array.isArray(response.specificDomains)) {
+          specificDomains = response.specificDomains;
+        }
+
+        // Notify inject script of all settings
+        notifyInjectScript();
+      }
+    })
+    .catch(() => {});
+
+  // Listen for state changes from background script
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === "LOGS_STATE_CHANGED") {
+      logsEnabled = message.enabled;
+      notifyInjectScript();
+    } else if (message.type === "DOMAIN_SETTINGS_CHANGED") {
+      allDomainsMode = message.allDomainsMode;
+      specificDomains = message.specificDomains;
+      notifyInjectScript();
+    }
+  });
 })();

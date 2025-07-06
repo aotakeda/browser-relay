@@ -318,30 +318,45 @@ npm test
 
 ### Environment Variables
 
-- `MCP_MODE` - Set to "true" to enable MCP server mode
-- `ALLOWED_DOMAINS` - Comma-separated list of domains to capture from (if not set, captures from all domains)
+- `MCP_MODE` - Set to "true" to enable MCP server mode at startup (optional - can be enabled via UI)
 - `LOG_CONSOLE_MESSAGES` - Set to "false" to disable console message logging to server output (default: true)
 - `LOG_NETWORK_REQUESTS` - Set to "false" to disable network request logging to server output (default: true)
 
-**Note:** The server runs on port 27497 and is not configurable. You must restart the server after changing environment variables for changes to take effect.
+**Note:** The server runs on port 27497 and is not configurable.
 
 ### Example Environment Configuration
 
-Create a `.env` file in the server directory:
+Create a `.env` file in the server directory (optional):
 
 ```bash
-# Server configuration
-MCP_MODE=true
-
-# Only capture from these domains (optional) - supports subdomains
-ALLOWED_DOMAINS=localhost,github.com,stackoverflow.com
+# Server configuration (all optional)
+MCP_MODE=true  # Enable MCP at startup (can also be enabled via UI)
 
 # Control what gets logged to server output for LLM visibility
 LOG_CONSOLE_MESSAGES=true  # Show console logs in server output
 LOG_NETWORK_REQUESTS=true  # Show network requests in server output
 ```
 
-If `ALLOWED_DOMAINS` is not set, the extension will capture from all websites. When set, it only captures from specified domains and their subdomains.
+### UI Configuration
+
+All Browser Relay settings are now managed through the extension popup interface:
+
+#### Domain Configuration
+- **All Domains Mode**: Captures from all websites (default)
+- **Specific Domains Mode**: Only captures from domains you specify
+- **Add/Remove Domains**: Use the extension popup to manage your domain list
+- **Subdomain Support**: Specified domains automatically include subdomains (e.g., `github.com` includes `gist.github.com`)
+
+#### Capture Controls
+- **Console Logs**: Toggle console log capture on/off
+- **Network Requests**: Toggle network request monitoring on/off
+- **MCP Server**: Enable/disable Model Context Protocol for AI assistants
+
+#### Data Management
+- **Clear Console Logs**: Remove all stored console logs
+- **Clear Network Requests**: Remove all stored network requests
+
+All settings are saved automatically and persist across browser sessions. No server restart required for configuration changes.
 
 ## How It Works
 
@@ -377,7 +392,8 @@ If `ALLOWED_DOMAINS` is not set, the extension will capture from all websites. W
    - Reload the webpage after installing the extension
    - Check browser console for extension errors
    - Look for `[Browser Relay]` debug messages in the browser console
-   - Verify the current domain is in your allow-list (if configured)
+   - Check the extension popup to ensure console logs are enabled
+   - Verify the current domain is included in your capture scope (check the popup "Capture Scope" section)
 
 2. **Debug logging not working**
 
@@ -393,10 +409,13 @@ If `ALLOWED_DOMAINS` is not set, the extension will capture from all websites. W
    - Verify no firewall is blocking the connection
    - Check server logs for incoming requests
 
-4. **Domain allow-list issues**
-   - Check if `ALLOWED_DOMAINS` environment variable is set
-   - Verify the current domain matches your allow-list
+4. **Domain filtering issues**
+   - Open the Browser Relay extension popup
+   - Check the "Capture Scope" section to see your current configuration
+   - If using "Specific Domains" mode, verify the current domain is in your list
+   - Add domains using the input field in the popup
    - Subdomains are automatically included (e.g., `github.com` includes `gist.github.com`)
+   - Switch to "All Domains" mode if you want to capture from all websites
 
 ### MCP Server Issues
 

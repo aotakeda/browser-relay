@@ -12,6 +12,9 @@ const app = express();
 const httpServer = createServer(app);
 const PORT = 27497;
 
+// MCP state - controlled by UI
+let mcpEnabled = false;
+
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
@@ -51,36 +54,38 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Allow-list configuration endpoint
-app.get("/allowed-domains", (_req, res) => {
-  const allowedDomainsEnv = process.env.ALLOWED_DOMAINS;
-  const enabled = !!allowedDomainsEnv;
-  const domains = enabled
-    ? allowedDomainsEnv
-        .split(",")
-        .map((d) => d.trim())
-        .filter((d) => d)
-    : [];
-
-  res.json({
-    enabled,
-    domains,
-  });
-});
-
 // Configuration endpoint for extension
 app.get("/config", (_req, res) => {
   res.json({
     port: PORT,
-    allowedDomains: {
-      enabled: !!process.env.ALLOWED_DOMAINS,
-      domains: process.env.ALLOWED_DOMAINS
-        ? process.env.ALLOWED_DOMAINS.split(",")
-            .map((d) => d.trim())
-            .filter((d) => d)
-        : [],
-    },
+    mcpEnabled,
   });
+});
+
+// MCP configuration endpoint
+app.post("/mcp-config", (req, res) => {
+  try {
+    const { mcpEnabled: newMcpEnabled } = req.body;
+    
+    if (typeof newMcpEnabled === 'boolean') {
+      mcpEnabled = newMcpEnabled;
+      
+      if (mcpEnabled) {
+        // Initialize MCP server if not already done
+        setupMCPServer().catch(error => {
+          logger.error("Failed to setup MCP server:", error);
+        });
+      }
+      
+      logger.info(`MCP mode ${mcpEnabled ? 'enabled' : 'disabled'} via UI`);
+      res.json({ success: true, mcpEnabled });
+    } else {
+      res.status(400).json({ error: "Invalid mcpEnabled value" });
+    }
+  } catch (error) {
+    logger.error("Error updating MCP config:", error);
+    res.status(500).json({ error: "Failed to update MCP config" });
+  }
 });
 
 async function start() {
@@ -88,8 +93,15 @@ async function start() {
     await initializeDatabase();
     logger.info("Database initialized");
 
-    await setupMCPServer();
-    logger.info("MCP server initialized");
+    // Only setup MCP server if enabled via environment variable for backwards compatibility
+    // UI can enable it dynamically later
+    if (process.env.MCP_MODE === "true") {
+      mcpEnabled = true;
+      await setupMCPServer();
+      logger.info("MCP server initialized");
+    } else {
+      logger.info("MCP server disabled - can be enabled via UI");
+    }
 
     httpServer.listen(PORT, () => {
       logger.info(`Server running on http://localhost:${PORT}`);

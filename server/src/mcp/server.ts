@@ -79,8 +79,9 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
 };
 
 export const setupMCPServer = async () => {
-  if (process.env.MCP_MODE !== "true") {
-    logger.info("MCP mode not enabled, skipping MCP server setup");
+  // Allow setup to be called dynamically, don't check environment variable
+  if (mcpServer) {
+    logger.info("MCP server already initialized");
     return;
   }
 

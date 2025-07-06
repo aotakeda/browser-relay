@@ -71,22 +71,6 @@ describe('Main Application', () => {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
     });
 
-    // Allow-list configuration endpoint
-    app.get('/allowed-domains', (_req, res) => {
-      const allowedDomainsEnv = process.env.ALLOWED_DOMAINS;
-      const enabled = !!allowedDomainsEnv;
-      const domains = enabled
-        ? allowedDomainsEnv
-            .split(',')
-            .map((d) => d.trim())
-            .filter((d) => d)
-        : [];
-
-      res.json({
-        enabled,
-        domains,
-      });
-    });
 
     server = httpServer;
   });
@@ -97,9 +81,6 @@ describe('Main Application', () => {
         server.close(() => resolve());
       });
     }
-    
-    // Clean up environment variables
-    delete process.env.ALLOWED_DOMAINS;
   });
 
   describe('Health Endpoint', () => {
@@ -123,70 +104,6 @@ describe('Main Application', () => {
     });
   });
 
-  describe('Allowed Domains Endpoint', () => {
-    it('should return disabled state when ALLOWED_DOMAINS is not set', async () => {
-      const response = await request(app)
-        .get('/allowed-domains')
-        .expect(200);
-
-      expect(response.body).toEqual({
-        enabled: false,
-        domains: []
-      });
-    });
-
-    it('should return enabled state with domains when ALLOWED_DOMAINS is set', async () => {
-      process.env.ALLOWED_DOMAINS = 'example.com,test.com,localhost';
-
-      const response = await request(app)
-        .get('/allowed-domains')
-        .expect(200);
-
-      expect(response.body).toEqual({
-        enabled: true,
-        domains: ['example.com', 'test.com', 'localhost']
-      });
-    });
-
-    it('should handle domains with extra spaces', async () => {
-      process.env.ALLOWED_DOMAINS = ' example.com , test.com , localhost ';
-
-      const response = await request(app)
-        .get('/allowed-domains')
-        .expect(200);
-
-      expect(response.body).toEqual({
-        enabled: true,
-        domains: ['example.com', 'test.com', 'localhost']
-      });
-    });
-
-    it('should filter out empty domains', async () => {
-      process.env.ALLOWED_DOMAINS = 'example.com,,test.com,';
-
-      const response = await request(app)
-        .get('/allowed-domains')
-        .expect(200);
-
-      expect(response.body).toEqual({
-        enabled: true,
-        domains: ['example.com', 'test.com']
-      });
-    });
-
-    it('should handle empty ALLOWED_DOMAINS environment variable', async () => {
-      process.env.ALLOWED_DOMAINS = '';
-
-      const response = await request(app)
-        .get('/allowed-domains')
-        .expect(200);
-
-      expect(response.body).toEqual({
-        enabled: false,
-        domains: []
-      });
-    });
-  });
 
   describe('CORS Configuration', () => {
     it('should allow all origins', async () => {
