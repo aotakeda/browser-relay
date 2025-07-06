@@ -51,13 +51,13 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
   switch (name) {
     case "get_console_logs": {
       const logs = await logStorage.getLogs(
-        args.limit || 100,
-        args.offset || 0,
+        (args.limit as number) || 100,
+        (args.offset as number) || 0,
         {
-          level: args.level,
-          url: args.url,
-          startTime: args.startTime,
-          endTime: args.endTime,
+          level: args.level as string,
+          url: args.url as string,
+          startTime: args.startTime as string,
+          endTime: args.endTime as string,
         }
       );
       return { logs };
@@ -69,7 +69,7 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
     }
 
     case "search_logs": {
-      const logs = await logStorage.searchLogs(args.query, args.limit || 100);
+      const logs = await logStorage.searchLogs(args.query as string, (args.limit as number) || 100);
       return { logs };
     }
 
