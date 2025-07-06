@@ -1,11 +1,14 @@
-const API_URL = "http://localhost:8765/logs";
-const NETWORK_API_URL = "http://localhost:8765/network-requests";
+// Configuration management
+const PORT = "27497"; // fixed port
+const API_URL = `http://localhost:${PORT}/logs`;
+const NETWORK_API_URL = `http://localhost:${PORT}/network-requests`;
+
 const RETRY_DELAYS = [1000, 2000, 4000, 8000, 16000]; // Exponential backoff
 
 let retryCount = 0;
 let sessionId = null;
 let networkRequestsBuffer = [];
-let pendingRequests = new Map(); // requestId -> request data
+const pendingRequests = new Map(); // requestId -> request data
 
 // Generate session ID on installation
 chrome.runtime.onInstalled.addListener(() => {
@@ -13,6 +16,32 @@ chrome.runtime.onInstalled.addListener(() => {
     .toString(36)
     .substr(2, 9)}`;
 });
+
+// Simple server health check - only check port 27497
+const checkServer = async () => {
+  try {
+    const response = await fetch(`http://localhost:27497/health-browser-relay`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(3000)
+    });
+    
+    if (response.ok) {
+      console.log('[Browser Relay] Connected to server on port 27497');
+      return true;
+    }
+  } catch {
+    console.log('[Browser Relay] Server not found on port 27497');
+  }
+  return false;
+};
+
+// Check server on startup
+checkServer();
+
+// Retry server check every 60 seconds
+setInterval(async () => {
+  await checkServer();
+}, 60000);
 
 const sendLogsToServer = async (logs) => {
   try {
@@ -34,7 +63,7 @@ const sendLogsToServer = async (logs) => {
     // Reset retry count on success
     retryCount = 0;
     return await response.json();
-  } catch (error) {
+  } catch {
     throw error;
   }
 };
@@ -42,7 +71,7 @@ const sendLogsToServer = async (logs) => {
 const sendLogsWithRetry = async (logs) => {
   try {
     await sendLogsToServer(logs);
-  } catch (error) {
+  } catch {
     if (retryCount < RETRY_DELAYS.length) {
       const delay = RETRY_DELAYS[retryCount];
       retryCount++;
@@ -74,7 +103,7 @@ const sendNetworkRequestsToServer = async (requests) => {
     }
 
     return await response.json();
-  } catch (error) {
+  } catch {
     throw error;
   }
 };
@@ -82,7 +111,7 @@ const sendNetworkRequestsToServer = async (requests) => {
 const sendNetworkRequestsWithRetry = async (requests) => {
   try {
     await sendNetworkRequestsToServer(requests);
-  } catch (error) {
+  } catch {
     // Silently fail for network requests to avoid overwhelming logs
   }
 };
@@ -98,8 +127,18 @@ const flushNetworkRequests = () => {
 // Filter out noise from network requests
 const shouldCaptureRequest = (url) => {
   // Skip extension URLs
-  if (url.startsWith('chrome-extension://')) return false;
-  
+  if (url.startsWith("chrome-extension://")) return false;
+
+  // Skip Browser Relay's own server requests (port 27497)
+  if (url.includes('localhost:27497')) {
+    return false;
+  }
+
+  // Skip Browser Relay's own health check requests for port detection
+  if (url.includes("localhost:") && url.includes("/health-browser-relay")) {
+    return false;
+  }
+
   // Skip common noise
   const noisePatterns = [
     /favicon\.ico/,
@@ -118,8 +157,8 @@ const shouldCaptureRequest = (url) => {
     /connect\.facebook\.net/,
     /platform\.twitter\.com/,
   ];
-  
-  return !noisePatterns.some(pattern => pattern.test(url));
+
+  return !noisePatterns.some((pattern) => pattern.test(url));
 };
 
 // Listen for messages from content scripts
@@ -138,7 +177,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
     if (!shouldCaptureRequest(details.url)) return;
-    
+
     const requestData = {
       requestId: details.requestId,
       timestamp: new Date().toISOString(),
@@ -146,9 +185,11 @@ chrome.webRequest.onBeforeRequest.addListener(
       url: details.url,
       pageUrl: details.initiator || details.url,
       userAgent: navigator.userAgent,
-      requestBody: details.requestBody ? JSON.stringify(details.requestBody) : undefined,
+      requestBody: details.requestBody
+        ? JSON.stringify(details.requestBody)
+        : undefined,
     };
-    
+
     pendingRequests.set(details.requestId, requestData);
   },
   { urls: ["<all_urls>"] },
@@ -158,11 +199,11 @@ chrome.webRequest.onBeforeRequest.addListener(
 chrome.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
     if (!shouldCaptureRequest(details.url)) return;
-    
+
     const requestData = pendingRequests.get(details.requestId);
     if (requestData) {
       const headers = {};
-      details.requestHeaders?.forEach(header => {
+      details.requestHeaders?.forEach((header) => {
         headers[header.name] = header.value;
       });
       requestData.requestHeaders = headers;
@@ -175,11 +216,11 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
 chrome.webRequest.onHeadersReceived.addListener(
   (details) => {
     if (!shouldCaptureRequest(details.url)) return;
-    
+
     const requestData = pendingRequests.get(details.requestId);
     if (requestData) {
       const headers = {};
-      details.responseHeaders?.forEach(header => {
+      details.responseHeaders?.forEach((header) => {
         headers[header.name] = header.value;
       });
       requestData.responseHeaders = headers;
@@ -193,7 +234,7 @@ chrome.webRequest.onHeadersReceived.addListener(
 chrome.webRequest.onCompleted.addListener(
   (details) => {
     if (!shouldCaptureRequest(details.url)) return;
-    
+
     const requestData = pendingRequests.get(details.requestId);
     if (requestData) {
       // Calculate duration
@@ -201,16 +242,16 @@ chrome.webRequest.onCompleted.addListener(
       const startTime = new Date(requestData.timestamp);
       const endTime = new Date(completedTime);
       requestData.duration = endTime.getTime() - startTime.getTime();
-      
+
       // Add final response data
       requestData.statusCode = details.statusCode;
-      
+
       // Add to buffer
       networkRequestsBuffer.push(requestData);
-      
+
       // Clean up
       pendingRequests.delete(details.requestId);
-      
+
       // Flush if buffer is full
       if (networkRequestsBuffer.length >= 50) {
         flushNetworkRequests();
@@ -223,15 +264,15 @@ chrome.webRequest.onCompleted.addListener(
 chrome.webRequest.onErrorOccurred.addListener(
   (details) => {
     if (!shouldCaptureRequest(details.url)) return;
-    
+
     const requestData = pendingRequests.get(details.requestId);
     if (requestData) {
       requestData.statusCode = 0;
       requestData.metadata = { error: details.error };
-      
+
       // Add to buffer
       networkRequestsBuffer.push(requestData);
-      
+
       // Clean up
       pendingRequests.delete(details.requestId);
     }
@@ -244,9 +285,9 @@ setInterval(flushNetworkRequests, 5000);
 
 // Handle extension icon click (optional - for future UI)
 if (chrome.action && chrome.action.onClicked) {
-  chrome.action.onClicked.addListener((tab) => {
+  chrome.action.onClicked.addListener((_tab) => {
     chrome.tabs.create({
-      url: "http://localhost:8765/logs",
+      url: API_URL,
     });
   });
 }

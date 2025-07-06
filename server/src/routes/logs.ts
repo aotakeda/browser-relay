@@ -36,32 +36,32 @@ logsRouter.post("/", async (req, res) => {
       filteredLogs.forEach((log) => {
         const url = new URL(log.pageUrl);
         const hostname = url.hostname;
-        const timestamp = new Date(log.timestamp).toLocaleTimeString();
+        const date = new Date(log.timestamp);
+        const timestamp = isNaN(date.getTime()) ? log.timestamp : date.toISOString();
 
-        // Create LLM-friendly structured log message
-        let logMessage = `=====================\n`;
-        logMessage += `🖥️  CONSOLE ${log.level.toUpperCase()} | ${hostname} | ${timestamp}\n`;
-        logMessage += `📄 Page: ${log.pageUrl}\n`;
-        logMessage += `💬 Message: ${log.message}`;
-
-        if (log.stackTrace) {
-          logMessage += `\n📍 Stack Trace:\n${log.stackTrace}`;
-        }
-
-        if (log.userAgent) {
-          const browser = extractBrowserInfo(log.userAgent);
-          logMessage += `\n🌐 Browser: ${browser}`;
-        }
-
-        logMessage += `\n=====================`;
+        // Create JSON structured log message
+        const logData = {
+          type: "console_log",
+          level: log.level,
+          hostname,
+          timestamp,
+          page_url: log.pageUrl,
+          message: log.message,
+          ...(log.stackTrace && { stack_trace: log.stackTrace }),
+          ...(log.userAgent && { 
+            user_agent: log.userAgent,
+            browser: extractBrowserInfo(log.userAgent)
+          }),
+          ...(log.metadata && { metadata: log.metadata })
+        };
 
         // Use appropriate log level
         if (log.level === "error") {
-          logger.error(logMessage);
+          logger.error(JSON.stringify(logData));
         } else if (log.level === "warn") {
-          logger.warn(logMessage);
+          logger.warn(JSON.stringify(logData));
         } else {
-          logger.info(logMessage);
+          logger.info(JSON.stringify(logData));
         }
       });
     }
@@ -97,9 +97,16 @@ logsRouter.get("/", async (req, res) => {
       endTime: endTime as string,
     };
 
+    const parsedLimit = parseInt(limit as string);
+    const parsedOffset = parseInt(offset as string);
+    
+    // Validate parsed values
+    const validLimit = isNaN(parsedLimit) || parsedLimit < 0 ? 100 : parsedLimit;
+    const validOffset = isNaN(parsedOffset) || parsedOffset < 0 ? 0 : parsedOffset;
+
     const logs = await logStorage.getLogs(
-      parseInt(limit as string),
-      parseInt(offset as string),
+      validLimit,
+      validOffset,
       filters
     );
 

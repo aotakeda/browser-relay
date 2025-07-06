@@ -6,7 +6,7 @@ export interface ConsoleLog {
   stackTrace?: string;
   pageUrl: string;
   userAgent?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface LogBatch {
@@ -29,7 +29,7 @@ export interface NetworkRequest {
   responseSize?: number;
   pageUrl: string;
   userAgent?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface NetworkRequestBatch {

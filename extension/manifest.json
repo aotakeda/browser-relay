@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Relays console logs and network requests to local server for development",
   "permissions": ["storage", "tabs", "webRequest", "webRequestBlocking"],
-  "host_permissions": ["http://localhost:8765/*", "<all_urls>"],
+  "host_permissions": ["http://localhost:*/*", "<all_urls>"],
   "action": {
     "default_title": "Browser Relay - Click to view logs"
   },

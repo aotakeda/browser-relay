@@ -1,7 +1,13 @@
 import { EventEmitter } from 'events';
 import { ConsoleLog } from '@/types';
-import { db, runAsync, allAsync, getAsync, CountResult } from '@/storage/database';
-import { logger } from '@/index';
+import { runAsync, allAsync, getAsync, CountResult } from '@/storage/database';
+
+// Create a simple logger to avoid circular imports
+const logger = {
+  warn: (message: string, ...args: unknown[]) => console.warn(message, ...args),
+  error: (message: string, ...args: unknown[]) => console.error(message, ...args),
+  info: (message: string, ...args: unknown[]) => console.log(message, ...args)
+};
 
 interface LogRow {
   id: number;
@@ -18,9 +24,10 @@ const MAX_LOGS = 10000;
 const logEmitter = new EventEmitter();
 
 // Safe JSON parsing helper
-const tryParseJSON = (jsonString: string): any => {
+const tryParseJSON = (jsonString: string): Record<string, unknown> | null => {
   try {
-    return JSON.parse(jsonString);
+    const parsed = JSON.parse(jsonString);
+    return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : null;
   } catch (error) {
     logger.warn('Failed to parse JSON metadata:', error);
     return null;
@@ -28,7 +35,7 @@ const tryParseJSON = (jsonString: string): any => {
 };
 
 // Safe JSON stringify helper
-const tryStringifyJSON = (obj: any): string | null => {
+const tryStringifyJSON = (obj: unknown): string | null => {
   try {
     return JSON.stringify(obj);
   } catch (error) {
@@ -107,7 +114,7 @@ export const getLogs = async (
   } = {}
 ): Promise<ConsoleLog[]> => {
   let query = 'SELECT * FROM logs WHERE 1=1';
-  const params: any[] = [];
+  const params: unknown[] = [];
   
   if (filters.level) {
     query += ' AND level = ?';
@@ -142,7 +149,7 @@ export const getLogs = async (
     stackTrace: row.stackTrace || undefined,
     pageUrl: row.pageUrl,
     userAgent: row.userAgent || undefined,
-    metadata: row.metadata ? tryParseJSON(row.metadata) : undefined
+    metadata: row.metadata ? tryParseJSON(row.metadata) || undefined : undefined
   }));
 };
 
@@ -152,7 +159,7 @@ export const clearLogs = async (): Promise<number> => {
   return count ? count.count : 0;
 };
 
-export const searchLogs = async (query: string, limit: number = 100): Promise<ConsoleLog[]> => {
+export const searchLogs = async (query: string, limit = 100): Promise<ConsoleLog[]> => {
   const rows = await allAsync<LogRow>(
     `SELECT * FROM logs 
      WHERE message LIKE ? OR stackTrace LIKE ?
@@ -168,7 +175,7 @@ export const searchLogs = async (query: string, limit: number = 100): Promise<Co
     stackTrace: row.stackTrace || undefined,
     pageUrl: row.pageUrl,
     userAgent: row.userAgent || undefined,
-    metadata: row.metadata ? tryParseJSON(row.metadata) : undefined
+    metadata: row.metadata ? tryParseJSON(row.metadata) || undefined : undefined
   }));
 };
 

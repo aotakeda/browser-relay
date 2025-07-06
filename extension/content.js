@@ -13,7 +13,7 @@
         type: "SEND_LOGS",
         logs: logs,
       });
-    } catch (error) {
+    } catch {
       // Silently fail - don't interfere with page
     }
   });

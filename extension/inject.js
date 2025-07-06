@@ -11,11 +11,11 @@
 
   let logBuffer = [];
   let batchTimer = null;
-  let pageLoaded = false;
+  const _pageLoaded = false;
   let sendingEnabled = false;
 
   // Store original console methods to avoid infinite loops
-  const originalConsole = {
+  const _originalConsole = {
     log: console.log.bind(console),
     warn: console.warn.bind(console),
     error: console.error.bind(console),
@@ -37,7 +37,7 @@
             return JSON.stringify(arg, null, 2);
           }
           return String(arg);
-        } catch (e) {
+        } catch {
           return "[Unable to stringify]";
         }
       })
@@ -90,10 +90,33 @@
     sendLogs();
   };
 
+  // Configuration management
+  const _PORT = '27497'; // fixed port
+  
+  // Simple server check - only check port 27497
+  const checkServer = async () => {
+    try {
+      const response = await fetch('http://localhost:27497/health-browser-relay', {
+        method: 'GET',
+        signal: AbortSignal.timeout(2000)
+      });
+      
+      if (response.ok) {
+        return true;
+      }
+    } catch {
+      // Server not available
+    }
+    return false;
+  };
+  
+  // Initialize server check
+  checkServer();
+  
   // Check domain allowlist via fetch
   const checkDomainAllowed = async () => {
     try {
-      const response = await fetch('http://localhost:8765/allowed-domains');
+      const response = await fetch('http://localhost:27497/allowed-domains');
       
       if (!response.ok) {
         throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
@@ -115,7 +138,7 @@
       }
       
       return true;
-    } catch (error) {
+    } catch {
       return true;
     }
   };
@@ -131,7 +154,7 @@
       try {
         const logEntry = createLogEntry(level, args);
         addLog(logEntry);
-      } catch (error) {
+      } catch {
         // Fail silently to not interfere with page
       }
     };
@@ -171,7 +194,7 @@
     if (logBuffer.length > 0) {
       // Use sendBeacon for reliability during unload
       navigator.sendBeacon(
-        "http://localhost:8765/logs",
+        'http://localhost:27497/logs',
         JSON.stringify({
           logs: logBuffer,
           sessionId: window.location.href,

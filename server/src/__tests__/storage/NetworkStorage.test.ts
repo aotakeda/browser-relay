@@ -81,9 +81,10 @@ describe('NetworkStorage', () => {
       
       const result = await networkStorage.insertRequests([mockRequest]);
       
-      // The actual implementation should truncate at 1MB
+      // The actual implementation should truncate at 1MB + '... [truncated]'
       expect(result[0].requestBody!.length).toBeLessThan(largeBody.length);
-      expect(result[0].requestBody!.length).toBeLessThanOrEqual(1024 * 1024 + 50); // Should be around 1MB + truncated message
+      expect(result[0].requestBody!.length).toBe(1024 * 1024 + '... [truncated]'.length);
+      expect(result[0].requestBody!.endsWith('... [truncated]')).toBe(true);
     });
   });
 

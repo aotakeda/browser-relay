@@ -1,6 +1,12 @@
 import { NetworkRequest } from '@/types';
-import { db, runAsync, allAsync, getAsync, RunResult, CountResult } from '@/storage/database';
-import { logger } from '@/index';
+import { runAsync, allAsync, getAsync, CountResult } from '@/storage/database';
+
+// Create a simple logger to avoid circular imports
+const logger = {
+  warn: (message: string, ...args: unknown[]) => console.warn(message, ...args),
+  error: (message: string, ...args: unknown[]) => console.error(message, ...args),
+  info: (message: string, ...args: unknown[]) => console.log(message, ...args)
+};
 
 const MAX_NETWORK_REQUESTS = 10000;
 const MAX_REQUEST_BODY_SIZE = 1024 * 1024; // 1MB
@@ -55,7 +61,12 @@ class NetworkStorage {
           ]
         );
 
-        const insertedRequest = { ...request, id: result.lastID };
+        const insertedRequest = { 
+          ...request, 
+          id: result.lastID,
+          requestBody,
+          responseBody
+        };
         insertedRequests.push(insertedRequest);
 
         // Notify listeners
@@ -78,8 +89,8 @@ class NetworkStorage {
   }
 
   async getRequests(
-    limit: number = 100,
-    offset: number = 0,
+    limit = 100,
+    offset = 0,
     filters: NetworkRequestFilter = {}
   ): Promise<NetworkRequest[]> {
     let query = 'SELECT * FROM network_requests WHERE 1=1';

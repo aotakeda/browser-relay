@@ -3,14 +3,65 @@ import { networkStorage } from "@/storage/NetworkStorage";
 import { NetworkRequest, NetworkRequestBatch } from "@/types";
 import { logger } from "@/index";
 
-// Helper functions for LLM-friendly output
-function getStatusEmoji(statusCode: number | undefined): string {
-  if (!statusCode) return "⏳";
-  if (statusCode >= 200 && statusCode < 300) return "✅";
-  if (statusCode >= 300 && statusCode < 400) return "🔄";
-  if (statusCode >= 400 && statusCode < 500) return "❌";
-  if (statusCode >= 500) return "💥";
-  return "❓";
+function getStatusCategory(statusCode: number | undefined): string {
+  if (!statusCode) return "pending";
+  if (statusCode >= 200 && statusCode < 300) return "success";
+  if (statusCode >= 300 && statusCode < 400) return "redirect";
+  if (statusCode >= 400 && statusCode < 500) return "client_error";
+  if (statusCode >= 500 && statusCode < 600) return "server_error";
+  return "unknown";
+}
+
+function processBodyForJSON(body: string | undefined): unknown {
+  if (!body) return null;
+
+  const maxLength = 800;
+
+  // Check if it's encoded/base64 data
+  if (body.length > 100 && /^[a-zA-Z0-9+/=]{100,}$/.test(body)) {
+    return {
+      type: "encoded_data",
+      length: body.length,
+      truncated: true,
+    };
+  }
+
+  // Try to parse as JSON
+  try {
+    const parsed = JSON.parse(body);
+    const prettyJSON = JSON.stringify(parsed, null, 2);
+
+    if (prettyJSON.length <= maxLength) {
+      return {
+        type: "json",
+        data: parsed,
+        truncated: false,
+      };
+    } else {
+      return {
+        type: "json",
+        data: parsed,
+        truncated: true,
+        original_length: body.length,
+      };
+    }
+  } catch {
+    // Not JSON, treat as plain text
+    if (body.length <= maxLength) {
+      return {
+        type: "text",
+        data: body,
+        truncated: false,
+      };
+    } else {
+      return {
+        type: "text",
+        data: body.substring(0, maxLength),
+        truncated: true,
+        original_length: body.length,
+      };
+    }
+  }
 }
 
 function isNoiseRequest(request: NetworkRequest): boolean {
@@ -65,55 +116,6 @@ function isNoiseRequest(request: NetworkRequest): boolean {
   return false;
 }
 
-function getMethodEmoji(method: string): string {
-  switch (method.toUpperCase()) {
-    case "GET":
-      return "📥";
-    case "POST":
-      return "📤";
-    case "PUT":
-      return "✏️";
-    case "DELETE":
-      return "🗑️";
-    case "PATCH":
-      return "🔧";
-    case "OPTIONS":
-      return "🔍";
-    default:
-      return "📡";
-  }
-}
-
-function formatHeaders(headers: Record<string, string> | undefined): string {
-  if (!headers || Object.keys(headers).length === 0) return "";
-
-  return Object.entries(headers)
-    .map(([key, value]) => `    ${key}: ${value}`)
-    .join("\n");
-}
-
-function truncateContent(content: string | undefined, maxLength = 800): string {
-  if (!content) return "";
-  if (content.length <= maxLength) return content;
-
-  // If it's JSON, try to show meaningful parts
-  try {
-    const parsed = JSON.parse(content);
-    const prettified = JSON.stringify(parsed, null, 2);
-    if (prettified.length <= maxLength) return prettified;
-
-    // Show first part of JSON structure
-    return prettified.substring(0, maxLength) + "... [JSON truncated]";
-  } catch {
-    // Not JSON, check if it's mostly encoded/base64 data
-    const hasLongEncodedString = /[a-zA-Z0-9+/=]{100,}/.test(content);
-    if (hasLongEncodedString) {
-      return "[Encoded/Base64 data - omitted for brevity]";
-    }
-
-    return content.substring(0, maxLength) + "... [truncated]";
-  }
-}
 
 export const networkRequestsRouter: Router = Router();
 
@@ -129,74 +131,83 @@ networkRequestsRouter.post("/", async (req, res) => {
     }
 
     // Filter out Browser Relay's own network requests and noise
-    const filteredRequests = batch.requests.filter(
-      (request) =>
-        !request.url.includes("localhost:8765") &&
-        !request.url.includes("browser-relay") &&
-        !request.pageUrl.includes("chrome-extension://") &&
-        !isNoiseRequest(request)
-    );
+    const filteredRequests = batch.requests.filter((request) => {
+      // Filter out ALL requests to our own server (port 27497)
+      if (request.url.includes("localhost:27497")) {
+        return false;
+      }
+
+      // Filter out Browser Relay's own health check requests for port detection
+      if (
+        request.url.includes("localhost:") &&
+        request.url.includes("/health-browser-relay")
+      ) {
+        return false;
+      }
+
+      // Filter out extension and other noise
+      if (
+        request.url.includes("browser-relay") ||
+        request.pageUrl.includes("chrome-extension://")
+      ) {
+        return false;
+      }
+
+      return !isNoiseRequest(request);
+    });
 
     // Log network requests for LLM visibility (if enabled)
     if (process.env.LOG_NETWORK_REQUESTS !== "false") {
       filteredRequests.forEach((request) => {
         const url = new URL(request.url);
         const hostname = url.hostname;
-        const timestamp = new Date(request.timestamp).toLocaleTimeString();
-        const statusEmoji = getStatusEmoji(request.statusCode);
-        const methodEmoji = getMethodEmoji(request.method);
+        const date = new Date(request.timestamp);
+        const timestamp = isNaN(date.getTime())
+          ? request.timestamp
+          : date.toISOString();
 
-        // Create LLM-friendly structured network request log
-        let logMessage = `=====================\n`;
-        logMessage += `${methodEmoji} NETWORK ${request.method} ${statusEmoji} | ${hostname} | ${timestamp}\n`;
-        logMessage += `🌐 URL: ${request.url}\n`;
-        logMessage += `📊 Status: ${request.statusCode || "pending"}`;
-
-        if (request.duration) {
-          logMessage += ` | ⏱️  ${request.duration}ms`;
-        }
-
-        // Request details
-        const reqHeaders = formatHeaders(request.requestHeaders);
-        if (reqHeaders) {
-          logMessage += `\n📤 Request Headers:\n${reqHeaders}`;
-        }
-
-        const reqBody = truncateContent(request.requestBody);
-        if (reqBody) {
-          logMessage += `\n📤 Request Body:\n    ${reqBody}`;
-        }
-
-        // Response details
-        const resHeaders = formatHeaders(request.responseHeaders);
-        if (resHeaders) {
-          logMessage += `\n📥 Response Headers:\n${resHeaders}`;
-        }
-
-        const resBody = truncateContent(request.responseBody);
-        if (resBody) {
-          logMessage += `\n📥 Response Body:\n    ${resBody}`;
-        }
-
-        // Add context for common API patterns
-        if (url.pathname.includes("/api/")) {
-          logMessage += `\n🔍 API Endpoint Detected`;
-        }
-
-        if (
-          request.requestHeaders?.["authorization"] ||
-          request.requestHeaders?.["Authorization"]
-        ) {
-          logMessage += `\n🔐 Authenticated Request`;
-        }
-
-        logMessage += `\n=====================`;
+        // Create JSON structured network request log
+        const logData = {
+          type: "network_request",
+          method: request.method,
+          url: request.url,
+          hostname,
+          timestamp,
+          status: {
+            code: request.statusCode,
+            category: getStatusCategory(request.statusCode),
+          },
+          ...(request.duration && { duration_ms: request.duration }),
+          ...(request.requestHeaders && {
+            request_headers: request.requestHeaders,
+          }),
+          ...(request.requestBody && {
+            request_body: processBodyForJSON(request.requestBody),
+          }),
+          ...(request.responseHeaders && {
+            response_headers: request.responseHeaders,
+          }),
+          ...(request.responseBody && {
+            response_body: processBodyForJSON(request.responseBody),
+          }),
+          ...(request.responseSize && { response_size: request.responseSize }),
+          context: {
+            is_api_endpoint:
+              url.pathname.includes("/api/") || url.hostname.includes("api"),
+            is_authenticated: !!(
+              request.requestHeaders?.["authorization"] ||
+              request.requestHeaders?.["Authorization"]
+            ),
+            ...(request.userAgent && { user_agent: request.userAgent }),
+            ...(request.pageUrl && { page_url: request.pageUrl }),
+          },
+        };
 
         // Use appropriate log level based on status
         if (request.statusCode && request.statusCode >= 400) {
-          logger.error(logMessage);
+          logger.error(JSON.stringify(logData));
         } else {
-          logger.info(logMessage);
+          logger.info(JSON.stringify(logData));
         }
       });
     }
@@ -249,7 +260,7 @@ networkRequestsRouter.get("/", async (req, res) => {
   }
 });
 
-networkRequestsRouter.get("/stream", (_req, res) => {
+networkRequestsRouter.get("/stream", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -281,7 +292,7 @@ networkRequestsRouter.get("/:id", async (req, res) => {
   }
 });
 
-networkRequestsRouter.delete("/", async (req, res) => {
+networkRequestsRouter.delete("/", async (_req, res) => {
   try {
     const count = await networkStorage.clearRequests();
     logger.info(`Cleared ${count} network requests`);

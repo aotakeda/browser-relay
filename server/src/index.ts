@@ -10,7 +10,7 @@ import { setupMCPServer } from "@/mcp/server";
 
 const app = express();
 const httpServer = createServer(app);
-const PORT = process.env.PORT || 8765;
+const PORT = 27497;
 
 const logger = winston.createLogger({
   level: "info",
@@ -37,6 +37,16 @@ app.use(express.json({ limit: "10mb" }));
 app.use("/logs", logsRouter);
 app.use("/network-requests", networkRequestsRouter);
 
+// Health check endpoint for Browser Relay extension port detection
+app.get("/health-browser-relay", (_req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    port: PORT,
+  });
+});
+
+// Keep the standard health endpoint for general use
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
@@ -55,6 +65,21 @@ app.get("/allowed-domains", (_req, res) => {
   res.json({
     enabled,
     domains,
+  });
+});
+
+// Configuration endpoint for extension
+app.get("/config", (_req, res) => {
+  res.json({
+    port: PORT,
+    allowedDomains: {
+      enabled: !!process.env.ALLOWED_DOMAINS,
+      domains: process.env.ALLOWED_DOMAINS
+        ? process.env.ALLOWED_DOMAINS.split(",")
+            .map((d) => d.trim())
+            .filter((d) => d)
+        : [],
+    },
   });
 });
 

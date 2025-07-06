@@ -8,10 +8,10 @@
 
 - **🖥️ Console Log Capture**: All console.log, warn, error, and info messages from any website
 - **🌐 Network Request Monitoring**: HTTP requests with headers, payloads, responses, and timing
-- **🤖 LLM-Optimized Output**: Structured, emoji-rich logs designed for AI assistant analysis
+- **🤖 LLM-Optimized Output**: Structured JSON logs designed for AI assistant analysis
 - **🧹 Smart Noise Filtering**: Automatically filters out images, tracking, and irrelevant requests
 - **🎯 Domain Filtering**: Capture logs only from specified domains
-- **📊 Local HTTP Server**: Express.js server with SQLite storage (port 8765) - no external connections
+- **📊 Local HTTP Server**: Express.js server with SQLite storage (runs on port 27497) - no external connections
 - **🔌 MCP Integration**: Access logs via Model Context Protocol tools in AI assistants (Claude, Cursor, etc.)
 - **⚡ Real-time Streaming**: Server-Sent Events for live log monitoring
 - **💾 Persistent Storage**: Logs and requests saved to local SQLite database
@@ -38,7 +38,7 @@ npm run build
 npm start
 ```
 
-The server will start on `http://localhost:8765`
+The server will start on `http://localhost:27497`
 
 ### 3. Install Chrome Extension
 
@@ -81,17 +81,83 @@ The server will start on `http://localhost:8765`
 
 ```bash
 # Console Logs
-curl "http://localhost:8765/logs?limit=10"                    # Recent logs
-curl "http://localhost:8765/logs?level=error"                # Error logs only
-curl "http://localhost:8765/logs?url=example.com"            # Logs from specific site
-curl -X DELETE "http://localhost:8765/logs"                  # Clear all logs
+curl "http://localhost:27497/logs?limit=10"                    # Recent logs
+curl "http://localhost:27497/logs?level=error"                # Error logs only
+curl "http://localhost:27497/logs?url=example.com"            # Logs from specific site
+curl -X DELETE "http://localhost:27497/logs"                  # Clear all logs
 
 # Network Requests
-curl "http://localhost:8765/network-requests?limit=10"       # Recent requests
-curl "http://localhost:8765/network-requests?method=POST"    # POST requests only
-curl "http://localhost:8765/network-requests?status=404"     # Failed requests
-curl -X DELETE "http://localhost:8765/network-requests"      # Clear all requests
+curl "http://localhost:27497/network-requests?limit=10"       # Recent requests
+curl "http://localhost:27497/network-requests?method=POST"    # POST requests only
+curl "http://localhost:27497/network-requests?status=404"     # Failed requests
+curl -X DELETE "http://localhost:27497/network-requests"      # Clear all requests
 ```
+
+## JSON Output Format
+
+Browser Relay outputs all logs and network requests in structured JSON format for easy programmatic analysis. This enables AI assistants and other tools to effectively parse and understand the captured data.
+
+### Console Logs JSON Structure
+
+```json
+{
+  "type": "console_log",
+  "level": "info|warn|error",
+  "hostname": "example.com", 
+  "timestamp": "2023-01-01T00:00:00.000Z",
+  "page_url": "https://example.com/page",
+  "message": "Log message content",
+  "stack_trace": "Error stack trace (if error)",
+  "user_agent": "Browser user agent string (if available)",
+  "browser": "Chrome|Firefox|Safari|Edge (if user_agent available)",
+  "metadata": { "custom": "data objects (if available)" }
+}
+```
+
+### Network Requests JSON Structure
+
+```json
+{
+  "type": "network_request",
+  "method": "GET|POST|PUT|DELETE|...",
+  "url": "https://api.example.com/endpoint",
+  "hostname": "api.example.com",
+  "timestamp": "2023-01-01T00:00:00.000Z",
+  "status": {
+    "code": 200,
+    "category": "success|client_error|server_error|redirect|pending|unknown"
+  },
+  "duration_ms": 150,
+  "request_headers": { "Content-Type": "application/json" },
+  "request_body": {
+    "type": "json|text|encoded_data",
+    "data": "processed content",
+    "truncated": false,
+    "original_length": 1024
+  },
+  "response_headers": { "Content-Type": "application/json" },
+  "response_body": {
+    "type": "json|text|encoded_data", 
+    "data": "processed content",
+    "truncated": false
+  },
+  "response_size": 2048,
+  "context": {
+    "is_api_endpoint": true,
+    "is_authenticated": false,
+    "user_agent": "Browser user agent",
+    "page_url": "https://example.com"
+  }
+}
+```
+
+### Smart Content Processing
+
+- **JSON Detection**: Automatically parses and prettifies JSON content
+- **Text Handling**: Preserves plain text with truncation info for large content
+- **Encoded Data**: Detects base64/encoded content and provides metadata instead of raw data
+- **Size Management**: Intelligently truncates large content while preserving structure
+- **Status Categorization**: Maps HTTP status codes to semantic categories
 
 ## MCP Integration
 
@@ -252,13 +318,12 @@ npm test
 
 ### Environment Variables
 
-- `PORT` - Server port (default: 8765)
 - `MCP_MODE` - Set to "true" to enable MCP server mode
 - `ALLOWED_DOMAINS` - Comma-separated list of domains to capture from (if not set, captures from all domains)
 - `LOG_CONSOLE_MESSAGES` - Set to "false" to disable console message logging to server output (default: true)
 - `LOG_NETWORK_REQUESTS` - Set to "false" to disable network request logging to server output (default: true)
 
-**Note:** You must restart the server after changing environment variables for changes to take effect.
+**Note:** The server runs on port 27497 and is not configurable. You must restart the server after changing environment variables for changes to take effect.
 
 ### Example Environment Configuration
 
@@ -266,7 +331,6 @@ Create a `.env` file in the server directory:
 
 ```bash
 # Server configuration
-PORT=8765
 MCP_MODE=true
 
 # Only capture from these domains (optional) - supports subdomains
@@ -299,7 +363,7 @@ If `ALLOWED_DOMAINS` is not set, the extension will capture from all websites. W
 
 1. **Batching** efficiently collects 50 items or 5-second intervals
 2. **Local Storage** saves everything to SQLite database (10k item circular buffer)
-3. **LLM-Optimized Output** structures logs with emojis and clear formatting
+3. **LLM-Optimized Output** structures logs as JSON with intelligent content processing
 4. **Real-time Streaming** provides live updates via Server-Sent Events
 5. **MCP Integration** enables AI assistant access for analysis and debugging
 
@@ -324,7 +388,7 @@ If `ALLOWED_DOMAINS` is not set, the extension will capture from all websites. W
 
 3. **Server connection errors**
 
-   - Ensure server is running on `http://localhost:8765`
+   - Ensure server is running on `http://localhost:27497`
    - Check for CORS errors in browser console
    - Verify no firewall is blocking the connection
    - Check server logs for incoming requests
@@ -351,9 +415,8 @@ If `ALLOWED_DOMAINS` is not set, the extension will capture from all websites. W
 
 1. **Port already in use**
 
-   ```bash
-   PORT=3001 npm run dev
-   ```
+   - The server runs on port 27497 and is not configurable
+   - Stop any other service using port 27497
 
 2. **TypeScript errors**
 
@@ -374,7 +437,7 @@ This tool is designed with privacy in mind:
 - **No Authentication**: Since it's local-only, no auth is needed
 - **No Tracking**: Zero telemetry or usage tracking
 - **Your Data**: All logs stored locally in `data/console-logs.db`
-- **Port 8765**: Runs only on localhost, not accessible externally
+- **Port 27497**: Runs only on localhost, not accessible externally
 
 ## License
 

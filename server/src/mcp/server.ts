@@ -47,7 +47,7 @@ const tools = [
   },
 ];
 
-const handleToolCall = async (name: string, args: any) => {
+const handleToolCall = async (name: string, args: Record<string, unknown>) => {
   switch (name) {
     case "get_console_logs": {
       const logs = await logStorage.getLogs(

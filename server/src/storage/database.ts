@@ -1,6 +1,5 @@
 import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
-import { logger } from '@/index';
 
 interface RunResult {
   lastID: number;
@@ -112,9 +111,9 @@ export async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_net_requestId ON network_requests(requestId);
     `);
 
-    logger.info('Database initialized successfully');
+    console.log('Database initialized successfully');
   } catch (error) {
-    logger.error('Failed to initialize database:', error);
+    console.error('Failed to initialize database:', error);
     throw error;
   }
 }
