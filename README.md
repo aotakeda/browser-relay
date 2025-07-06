@@ -27,7 +27,7 @@
 npm install
 ```
 
-### 2. Start the Server
+### 2. Build and Start
 
 ```bash
 # Development mode with auto-reload
@@ -38,7 +38,7 @@ npm run build
 npm start
 ```
 
-The server will start on `http://localhost:27497`
+The server will start on `http://localhost:27497` (fixed port, not configurable)
 
 ### 3. Install Chrome Extension
 
@@ -267,6 +267,15 @@ clear_network_requests();
 
 ## Development
 
+### Architecture
+
+### High-Level Structure
+
+- **Chrome Extension**: Manifest v3 extension with service worker and content scripts
+- **Local Server**: HTTP/MCP server running on fixed port 27497
+- **SQLite Database**: Local persistence with intelligent filtering and circular buffer (10k entries)
+- **Monorepo**: Root workspace managing server and extension subprojects
+
 ### Project Structure
 
 ```
@@ -297,23 +306,39 @@ browser-relay/
 └── README.md               # This file
 ```
 
+### Key Components
+
+- `extension/`: Chrome extension with background service worker and dual content scripts
+- `server/`: Node.js/Express server with MCP integration and SQLite storage
+- `server/src/storage/`: Database layer with LogStorage class and schema management
+- `server/src/mcp/`: MCP server implementation for AI assistant access
+- `server/src/routes/`: HTTP API endpoints for log retrieval and filtering
+
 ### Development Commands
 
 ```bash
 # Install all dependencies
 npm install
 
-# Run server in development mode (auto-reload)
+# Development mode (watches files, rebuilds automatically)
 npm run dev
 
-# Build TypeScript to JavaScript
+# Build everything
 npm run build
 
 # Start production server
 npm start
 
-# Run tests
+# Run all tests
 npm test
+
+# Run linting
+npm run lint
+
+# Server-specific commands
+npm run test:server     # Run server tests only
+npm run dev:server      # Start server in development mode
+npm run build:server    # Build server only
 ```
 
 ### UI Configuration
@@ -429,9 +454,16 @@ All settings are saved automatically and persist across browser sessions. No ser
    ```
 
 3. **Database issues**
-   - Server uses persistent SQLite database in `data/console-logs.db`
+   - Server uses persistent SQLite database in `server/data/browserrelay.db`
    - Check server logs for database initialization errors
    - Use `DELETE /logs` endpoint to clear logs without restarting
+
+### Testing
+
+- **Jest**: TypeScript testing with memory database for isolation
+- **Integration Tests**: Full server lifecycle testing
+- **Unit Tests**: Storage, routes, and MCP components
+- **Test Setup**: Automatic database cleanup and proper async handling
 
 ## Privacy & Security
 
@@ -440,7 +472,7 @@ This tool is designed with privacy in mind:
 - **100% Local**: No external servers, APIs, or cloud services
 - **No Authentication**: Since it's local-only, no auth is needed
 - **No Tracking**: Zero telemetry or usage tracking
-- **Your Data**: All logs stored locally in `browser-relay/server/data/browserrelay.db`
+- **Your Data**: All logs stored locally in `server/data/browserrelay.db`
 - **Port 27497**: Runs only on localhost, not accessible externally
 
 ## License
