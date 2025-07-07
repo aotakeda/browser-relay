@@ -7,7 +7,8 @@
 ## Features
 
 - **Console Log Capture**: All console.log, warn, error, and info messages from any website
-- **Network Request Monitoring**: HTTP requests with headers, payloads, responses, and timing
+- **Network Request Monitoring**: HTTP requests with headers, request/response bodies, and timing data
+- **Response Body Capture**: Full response content for JSON, HTML, XML, and JavaScript requests
 - **LLM-Optimized Output**: Structured JSON logs designed for AI assistant analysis
 - **Smart Noise Filtering**: Automatically filters out images, tracking, and irrelevant requests
 - **Domain Filtering**: Capture logs only from specified domains
@@ -139,7 +140,8 @@ Browser Relay outputs all logs and network requests in structured JSON format fo
   "response_body": {
     "type": "json|text|encoded_data",
     "data": "processed content",
-    "truncated": false
+    "truncated": false,
+    "original_length": 2048
   },
   "response_size": 2048,
   "context": {
@@ -153,10 +155,12 @@ Browser Relay outputs all logs and network requests in structured JSON format fo
 
 ### Smart Content Processing
 
+- **Response Body Capture**: Intercepts and captures response bodies for text-based content types
 - **JSON Detection**: Automatically parses and prettifies JSON content
 - **Text Handling**: Preserves plain text with truncation info for large content
+- **Content Type Filtering**: Only captures response bodies for JSON, HTML, XML, and JavaScript
+- **Size Management**: Limits response bodies to 50KB to prevent memory issues
 - **Encoded Data**: Detects base64/encoded content and provides metadata instead of raw data
-- **Size Management**: Intelligently truncates large content while preserving structure
 - **Status Categorization**: Maps HTTP status codes to semantic categories
 
 ## MCP Integration
@@ -376,10 +380,12 @@ All settings are saved automatically and persist across browser sessions. No ser
 
 ### Network Request Monitoring
 
-1. **webRequest API** intercepts all HTTP requests from websites
-2. **Comprehensive Capture** records method, URL, headers, payloads, responses, timing
-3. **Intelligent Filtering** excludes images, fonts, analytics, tracking, and encoded noise
-4. **Request Correlation** tracks full request lifecycle from start to completion
+1. **JavaScript Interception** captures fetch() and XMLHttpRequest calls in the page's main context
+2. **Response Body Capture** reads full response content for text-based requests (JSON, HTML, XML, JS)
+3. **Comprehensive Data** records method, URL, headers, request/response bodies, status codes, and timing
+4. **Intelligent Filtering** excludes images, fonts, analytics, tracking, and binary content
+5. **Memory Optimization** limits response bodies to 50KB with truncation indicators
+6. **Request Correlation** tracks full request lifecycle from start to completion
 
 ### Data Processing
 
