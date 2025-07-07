@@ -8,7 +8,6 @@ const RETRY_DELAYS = [1000, 2000, 4000, 8000, 16000]; // Exponential backoff
 let retryCount = 0;
 let sessionId = null;
 let networkRequestsBuffer = [];
-const pendingRequests = new Map(); // requestId -> request data
 let logsEnabled = true; // Default to enabled
 let networkEnabled = true; // Default to enabled
 let mcpEnabled = false; // Default to disabled for MCP
@@ -154,73 +153,17 @@ const flushNetworkRequests = () => {
   }
 };
 
-// Check if domain should be captured based on UI configuration
-const shouldCaptureDomain = (url) => {
-  // Always capture if in all domains mode
-  if (allDomainsMode) {
-    return true;
-  }
-  
-  // Extract hostname from URL
-  let hostname;
-  try {
-    hostname = new URL(url).hostname;
-  } catch {
-    return false;
-  }
-  
-  // Check if hostname matches any specific domain (including subdomains)
-  return specificDomains.some(domain => 
-    hostname === domain || hostname.endsWith('.' + domain)
-  );
-};
+// Domain filtering is now handled in content script
 
-// Filter out noise from network requests
-const shouldCaptureRequest = (url) => {
-  // Skip extension URLs
-  if (url.startsWith("chrome-extension://")) return false;
-
-  // Skip Browser Relay's own server requests (port 27497)
-  if (url.includes('localhost:27497')) {
-    return false;
-  }
-
-  // Skip Browser Relay's own health check requests for port detection
-  if (url.includes("localhost:") && url.includes("/health-browser-relay")) {
-    return false;
-  }
-
-  // Check domain filtering first
-  if (!shouldCaptureDomain(url)) {
-    return false;
-  }
-
-  // Skip common noise
-  const noisePatterns = [
-    /favicon\.ico/,
-    /\.png$/,
-    /\.jpg$/,
-    /\.jpeg$/,
-    /\.gif$/,
-    /\.svg$/,
-    /\.woff/,
-    /\.ttf$/,
-    /\.eot$/,
-    /google-analytics/,
-    /googletagmanager/,
-    /doubleclick/,
-    /facebook\.com\/tr/,
-    /connect\.facebook\.net/,
-    /platform\.twitter\.com/,
-  ];
-
-  return !noisePatterns.some((pattern) => pattern.test(url));
-};
+// Network request filtering is now handled in inject script
 
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "SEND_LOGS") {
     sendLogsWithRetry(message.logs);
+    sendResponse({ received: true });
+  } else if (message.type === "SEND_NETWORK_REQUESTS") {
+    sendNetworkRequestsWithRetry(message.requests);
     sendResponse({ received: true });
   } else if (message.type === "CONTENT_SCRIPT_READY") {
     sendResponse({ sessionId, logsEnabled, networkEnabled, mcpEnabled, allDomainsMode, specificDomains });
@@ -300,112 +243,114 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // Keep message channel open for async response
 });
 
-// Network request capture
-chrome.webRequest.onBeforeRequest.addListener(
-  (details) => {
-    if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
-
-    const requestData = {
-      requestId: details.requestId,
-      timestamp: new Date().toISOString(),
-      method: details.method,
-      url: details.url,
-      pageUrl: details.initiator || details.url,
-      userAgent: navigator.userAgent,
-      requestBody: details.requestBody
-        ? JSON.stringify(details.requestBody)
-        : undefined,
-    };
-
-    pendingRequests.set(details.requestId, requestData);
-  },
-  { urls: ["<all_urls>"] },
-  ["requestBody"]
-);
-
-chrome.webRequest.onBeforeSendHeaders.addListener(
-  (details) => {
-    if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
-
-    const requestData = pendingRequests.get(details.requestId);
-    if (requestData) {
-      const headers = {};
-      details.requestHeaders?.forEach((header) => {
-        headers[header.name] = header.value;
-      });
-      requestData.requestHeaders = headers;
-    }
-  },
-  { urls: ["<all_urls>"] },
-  ["requestHeaders"]
-);
-
-chrome.webRequest.onHeadersReceived.addListener(
-  (details) => {
-    if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
-
-    const requestData = pendingRequests.get(details.requestId);
-    if (requestData) {
-      const headers = {};
-      details.responseHeaders?.forEach((header) => {
-        headers[header.name] = header.value;
-      });
-      requestData.responseHeaders = headers;
-      requestData.statusCode = details.statusCode;
-    }
-  },
-  { urls: ["<all_urls>"] },
-  ["responseHeaders"]
-);
-
-chrome.webRequest.onCompleted.addListener(
-  (details) => {
-    if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
-
-    const requestData = pendingRequests.get(details.requestId);
-    if (requestData) {
-      // Calculate duration
-      const completedTime = new Date().toISOString();
-      const startTime = new Date(requestData.timestamp);
-      const endTime = new Date(completedTime);
-      requestData.duration = endTime.getTime() - startTime.getTime();
-
-      // Add final response data
-      requestData.statusCode = details.statusCode;
-
-      // Add to buffer
-      networkRequestsBuffer.push(requestData);
-
-      // Clean up
-      pendingRequests.delete(details.requestId);
-
-      // Flush if buffer is full
-      if (networkRequestsBuffer.length >= 50) {
-        flushNetworkRequests();
-      }
-    }
-  },
-  { urls: ["<all_urls>"] }
-);
-
-chrome.webRequest.onErrorOccurred.addListener(
-  (details) => {
-    if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
-
-    const requestData = pendingRequests.get(details.requestId);
-    if (requestData) {
-      requestData.statusCode = 0;
-      requestData.metadata = { error: details.error };
-
-      // Add to buffer
-      networkRequestsBuffer.push(requestData);
-
-      // Clean up
-      pendingRequests.delete(details.requestId);
-    }
-  },
-  { urls: ["<all_urls>"] }
-);
+// Network request capture - DISABLED in favor of inject script capture
+// The inject script can capture response bodies, which webRequest API cannot
+// 
+// chrome.webRequest.onBeforeRequest.addListener(
+//   (details) => {
+//     if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
+//
+//     const requestData = {
+//       requestId: details.requestId,
+//       timestamp: new Date().toISOString(),
+//       method: details.method,
+//       url: details.url,
+//       pageUrl: details.initiator || details.url,
+//       userAgent: navigator.userAgent,
+//       requestBody: details.requestBody
+//         ? JSON.stringify(details.requestBody)
+//         : undefined,
+//     };
+//
+//     pendingRequests.set(details.requestId, requestData);
+//   },
+//   { urls: ["<all_urls>"] },
+//   ["requestBody"]
+// );
+//
+// chrome.webRequest.onBeforeSendHeaders.addListener(
+//   (details) => {
+//     if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
+//
+//     const requestData = pendingRequests.get(details.requestId);
+//     if (requestData) {
+//       const headers = {};
+//       details.requestHeaders?.forEach((header) => {
+//         headers[header.name] = header.value;
+//       });
+//       requestData.requestHeaders = headers;
+//     }
+//   },
+//   { urls: ["<all_urls>"] },
+//   ["requestHeaders"]
+// );
+//
+// chrome.webRequest.onHeadersReceived.addListener(
+//   (details) => {
+//     if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
+//
+//     const requestData = pendingRequests.get(details.requestId);
+//     if (requestData) {
+//       const headers = {};
+//       details.responseHeaders?.forEach((header) => {
+//         headers[header.name] = header.value;
+//       });
+//       requestData.responseHeaders = headers;
+//       requestData.statusCode = details.statusCode;
+//     }
+//   },
+//   { urls: ["<all_urls>"] },
+//   ["responseHeaders"]
+// );
+//
+// chrome.webRequest.onCompleted.addListener(
+//   (details) => {
+//     if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
+//
+//     const requestData = pendingRequests.get(details.requestId);
+//     if (requestData) {
+//       // Calculate duration
+//       const completedTime = new Date().toISOString();
+//       const startTime = new Date(requestData.timestamp);
+//       const endTime = new Date(completedTime);
+//       requestData.duration = endTime.getTime() - startTime.getTime();
+//
+//       // Add final response data
+//       requestData.statusCode = details.statusCode;
+//
+//       // Add to buffer
+//       networkRequestsBuffer.push(requestData);
+//
+//       // Clean up
+//       pendingRequests.delete(details.requestId);
+//
+//       // Flush if buffer is full
+//       if (networkRequestsBuffer.length >= 50) {
+//         flushNetworkRequests();
+//       }
+//     }
+//   },
+//   { urls: ["<all_urls>"] }
+// );
+//
+// chrome.webRequest.onErrorOccurred.addListener(
+//   (details) => {
+//     if (!networkEnabled || !shouldCaptureRequest(details.url)) return;
+//
+//     const requestData = pendingRequests.get(details.requestId);
+//     if (requestData) {
+//       requestData.statusCode = 0;
+//       requestData.metadata = { error: details.error };
+//
+//       // Add to buffer
+//       networkRequestsBuffer.push(requestData);
+//
+//       // Clean up
+//       pendingRequests.delete(details.requestId);
+//     }
+//   },
+//   { urls: ["<all_urls>"] }
+// );
 
 // Flush network requests periodically
 setInterval(flushNetworkRequests, 5000);

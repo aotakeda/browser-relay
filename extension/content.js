@@ -18,24 +18,40 @@
 
   // Listen for logs from the main world script
   window.addEventListener("message", async (event) => {
-    if (event.source !== window || event.data.type !== "CONSOLE_RELAY_LOGS") {
-      return;
-    }
+    if (event.source !== window) return;
+    
+    if (event.data.type === "CONSOLE_RELAY_LOGS") {
+      // Don't send logs if log capture is disabled or domain not allowed
+      if (!logsEnabled || !shouldCaptureDomain()) {
+        return;
+      }
 
-    // Don't send logs if log capture is disabled or domain not allowed
-    if (!logsEnabled || !shouldCaptureDomain()) {
-      return;
-    }
+      const logs = event.data.logs;
 
-    const logs = event.data.logs;
+      try {
+        await chrome.runtime.sendMessage({
+          type: "SEND_LOGS",
+          logs: logs,
+        });
+      } catch {
+        // Silently fail - don't interfere with page
+      }
+    } else if (event.data.type === "CONSOLE_RELAY_NETWORK") {
+      // Don't send network requests if domain not allowed
+      if (!shouldCaptureDomain()) {
+        return;
+      }
 
-    try {
-      await chrome.runtime.sendMessage({
-        type: "SEND_LOGS",
-        logs: logs,
-      });
-    } catch {
-      // Silently fail - don't interfere with page
+      const requests = event.data.requests;
+
+      try {
+        await chrome.runtime.sendMessage({
+          type: "SEND_NETWORK_REQUESTS",
+          requests: requests,
+        });
+      } catch {
+        // Silently fail - don't interfere with page
+      }
     }
   });
 
