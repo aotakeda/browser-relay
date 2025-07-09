@@ -70,7 +70,8 @@ describe('JSON Output Format', () => {
       expect(mockLogger.info).toHaveBeenCalledTimes(1);
       
       const loggedMessage = mockLogger.info.mock.calls[0][0];
-      const parsedLog = JSON.parse(loggedMessage);
+      // Since our logger now passes objects directly, no need to parse JSON
+      const parsedLog = loggedMessage;
 
       expect(parsedLog).toEqual({
         type: 'console_log',
@@ -105,7 +106,8 @@ describe('JSON Output Format', () => {
       expect(mockLogger.error).toHaveBeenCalledTimes(1);
       
       const loggedMessage = mockLogger.error.mock.calls[0][0];
-      const parsedLog = JSON.parse(loggedMessage);
+      // Since our logger now passes objects directly, no need to parse JSON
+      const parsedLog = loggedMessage;
 
       expect(parsedLog).toEqual({
         type: 'console_log',
@@ -138,7 +140,8 @@ describe('JSON Output Format', () => {
       expect(mockLogger.warn).toHaveBeenCalledTimes(1);
       
       const loggedMessage = mockLogger.warn.mock.calls[0][0];
-      const parsedLog = JSON.parse(loggedMessage);
+      // Since our logger now passes objects directly, no need to parse JSON
+      const parsedLog = loggedMessage;
 
       expect(parsedLog).toEqual({
         type: 'console_log',
@@ -174,7 +177,8 @@ describe('JSON Output Format', () => {
       expect(mockLogger.info).toHaveBeenCalledTimes(1);
       
       const loggedMessage = mockLogger.info.mock.calls[0][0];
-      const parsedLog = JSON.parse(loggedMessage);
+      // Since our logger now passes objects directly, no need to parse JSON
+      const parsedLog = loggedMessage;
 
       expect(parsedLog).toEqual({
         type: 'console_log',
@@ -248,7 +252,8 @@ describe('JSON Output Format', () => {
       expect(mockLogger.info).toHaveBeenCalledTimes(1);
       
       const loggedMessage = mockLogger.info.mock.calls[0][0];
-      const parsedLog = JSON.parse(loggedMessage);
+      // Since our logger now passes objects directly, no need to parse JSON
+      const parsedLog = loggedMessage;
 
       expect(parsedLog).toEqual({
         type: 'network_request',
@@ -293,7 +298,8 @@ describe('JSON Output Format', () => {
       expect(mockLogger.error).toHaveBeenCalledTimes(1);
       
       const loggedMessage = mockLogger.error.mock.calls[0][0];
-      const parsedLog = JSON.parse(loggedMessage);
+      // Since our logger now passes objects directly, no need to parse JSON
+      const parsedLog = loggedMessage;
 
       expect(parsedLog).toEqual({
         type: 'network_request',
@@ -344,7 +350,8 @@ describe('JSON Output Format', () => {
       expect(mockLogger.info).toHaveBeenCalledTimes(1);
       
       const loggedMessage = mockLogger.info.mock.calls[0][0];
-      const parsedLog = JSON.parse(loggedMessage);
+      // Since our logger now passes objects directly, no need to parse JSON
+      const parsedLog = loggedMessage;
 
       expect(parsedLog).toEqual({
         type: 'network_request',
@@ -399,7 +406,8 @@ describe('JSON Output Format', () => {
       expect(mockLogger.info).toHaveBeenCalledTimes(1);
       
       const loggedMessage = mockLogger.info.mock.calls[0][0];
-      const parsedLog = JSON.parse(loggedMessage);
+      // Since our logger now passes objects directly, no need to parse JSON
+      const parsedLog = loggedMessage;
 
       expect(parsedLog.request_body).toEqual({
         type: 'json',
@@ -438,7 +446,8 @@ describe('JSON Output Format', () => {
       expect(mockLogger.info).toHaveBeenCalledTimes(1);
       
       const loggedMessage = mockLogger.info.mock.calls[0][0];
-      const parsedLog = JSON.parse(loggedMessage);
+      // Since our logger now passes objects directly, no need to parse JSON
+      const parsedLog = loggedMessage;
 
       expect(parsedLog.request_body).toEqual({
         type: 'text',
@@ -478,7 +487,8 @@ describe('JSON Output Format', () => {
       expect(mockLogger.info).toHaveBeenCalledTimes(1);
       
       const loggedMessage = mockLogger.info.mock.calls[0][0];
-      const parsedLog = JSON.parse(loggedMessage);
+      // Since our logger now passes objects directly, no need to parse JSON
+      const parsedLog = loggedMessage;
 
       expect(parsedLog.request_body).toEqual({
         type: 'encoded_data',
@@ -528,7 +538,8 @@ describe('JSON Output Format', () => {
       expect(mockLogger.info).toHaveBeenCalledTimes(1);
       
       const loggedMessage = mockLogger.info.mock.calls[0][0];
-      const parsedLog = JSON.parse(loggedMessage);
+      // Since our logger now passes objects directly, no need to parse JSON
+      const parsedLog = loggedMessage;
 
       expect(parsedLog.request_body).toEqual({
         type: 'json',
@@ -610,7 +621,8 @@ describe('JSON Output Format', () => {
         expect(loggerMethod).toHaveBeenCalledTimes(1);
         
         const loggedMessage = loggerMethod.mock.calls[0][0];
-        const parsedLog = JSON.parse(loggedMessage);
+        // Since our logger now passes objects directly, no need to parse JSON
+        const parsedLog = loggedMessage;
 
         expect(parsedLog.status.category).toBe(expectedCategory);
       });

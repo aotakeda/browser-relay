@@ -14,7 +14,9 @@ import path from 'path';
 import fs from 'fs';
 
 // Create data directory if it doesn't exist
-const dataDir = path.join(process.cwd(), 'data');
+// Use __dirname to get the directory of this file, then navigate to server/data
+// This file is in server/src/storage/, so we go up 2 levels to server/ then into data/
+const dataDir = path.join(__dirname, '..', '..', 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }

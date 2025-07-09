@@ -14,11 +14,73 @@
   let sendingEnabled = false;
   let logsEnabled = true;
   let shouldCaptureDomain = true;
+  let allDomainsMode = true;
+  let specificDomains = [];
   let networkConfig = null;
 
   const captureStackTrace = () => {
     const stack = new Error().stack;
     return stack ? stack.split("\n").slice(3).join("\n") : undefined;
+  };
+
+  // Helper function to safely serialize headers for postMessage
+  const serializeHeaders = (headers) => {
+    if (!headers) return {};
+    
+    try {
+      // If it's already a plain object, return it
+      if (headers.constructor === Object) {
+        return headers;
+      }
+      
+      // If it's a Headers object, convert it
+      if (headers && typeof headers.entries === 'function') {
+        return Object.fromEntries(headers.entries());
+      }
+      
+      // For any other case, try to convert to plain object
+      return { ...headers };
+    } catch (error) {
+      // If all else fails, return empty object
+      console.warn('[Browser Relay] Failed to serialize headers:', error);
+      return {};
+    }
+  };
+
+  // Check if a specific URL should be captured based on domain configuration
+  const shouldCaptureUrlDomain = (url) => {
+    if (allDomainsMode) {
+      return true;
+    }
+
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname;
+      const port = urlObj.port;
+      const hostWithPort = port ? `${hostname}:${port}` : hostname;
+      
+      return specificDomains.some((domain) => {
+        // First check exact match with host:port
+        if (hostWithPort === domain) {
+          return true;
+        }
+        
+        // Then check hostname-only match (for domains without ports)
+        if (hostname === domain) {
+          return true;
+        }
+        
+        // Finally check subdomain match (for domains without ports)
+        if (hostname.endsWith("." + domain)) {
+          return true;
+        }
+        
+        return false;
+      });
+    } catch {
+      // If URL parsing fails, don't capture
+      return false;
+    }
   };
 
   const createLogEntry = (level, args) => ({
@@ -192,6 +254,8 @@
 
     logsEnabled = event.data.logsEnabled;
     shouldCaptureDomain = event.data.shouldCapture;
+    allDomainsMode = event.data.allDomainsMode;
+    specificDomains = event.data.specificDomains || [];
 
     // If capture is disabled (logs or domain), clear any buffered logs
     if (!logsEnabled || !shouldCaptureDomain) {
@@ -216,8 +280,8 @@
         userAgent: navigator.userAgent,
         metadata: {
           type: "unhandled_promise_rejection",
-          source: "browser_generated"
-        }
+          source: "browser_generated",
+        },
       };
       addLog(consoleEntry);
     });
@@ -228,20 +292,31 @@
       if (event.target !== window && event.target.tagName) {
         const element = event.target;
         const url = element.src || element.href || element.currentSrc;
-        
+
         if (url) {
           // Determine error type based on URL pattern and context
           let errorMessage = `GET ${url} net::ERR_BLOCKED_BY_CLIENT`;
-          
+
           // Check if it's a localhost 404 error (common pattern)
-          if (url.includes("localhost") && (url.includes(".jpg") || url.includes(".png") || url.includes(".css") || url.includes(".js"))) {
+          if (
+            url.includes("localhost") &&
+            (url.includes(".jpg") ||
+              url.includes(".png") ||
+              url.includes(".css") ||
+              url.includes(".js"))
+          ) {
             errorMessage = `GET ${url} 404 (Not Found)`;
           }
           // Check for external tracking/analytics URLs (commonly blocked)
-          else if (url.includes("stats.") || url.includes("analytics") || url.includes("tracking") || url.includes("pusher.com")) {
+          else if (
+            url.includes("stats.") ||
+            url.includes("analytics") ||
+            url.includes("tracking") ||
+            url.includes("pusher.com")
+          ) {
             errorMessage = `GET ${url} net::ERR_BLOCKED_BY_CLIENT`;
           }
-          
+
           // This is a resource loading error
           const consoleEntry = {
             timestamp: new Date().toISOString(),
@@ -254,8 +329,8 @@
               type: "resource_loading_error",
               element_type: element.tagName.toLowerCase(),
               url: url,
-              source: "browser_generated"
-            }
+              source: "browser_generated",
+            },
           };
           addLog(consoleEntry);
         }
@@ -264,8 +339,10 @@
         const consoleEntry = {
           timestamp: new Date().toISOString(),
           level: "error",
-          message: `Uncaught ${event.error?.name || 'Error'}: ${event.message}`,
-          stackTrace: event.error?.stack || `    at ${event.filename}:${event.lineno}:${event.colno}`,
+          message: `Uncaught ${event.error?.name || "Error"}: ${event.message}`,
+          stackTrace:
+            event.error?.stack ||
+            `    at ${event.filename}:${event.lineno}:${event.colno}`,
           pageUrl: window.location.href,
           userAgent: navigator.userAgent,
           metadata: {
@@ -273,8 +350,8 @@
             filename: event.filename,
             lineno: event.lineno,
             colno: event.colno,
-            source: "browser_generated"
-          }
+            source: "browser_generated",
+          },
         };
         addLog(consoleEntry);
       }
@@ -283,19 +360,20 @@
     // Intercept deprecated API usage warnings
     const originalDeprecatedMethod = window.webkitRequestAnimationFrame;
     if (originalDeprecatedMethod) {
-      window.webkitRequestAnimationFrame = function(...args) {
+      window.webkitRequestAnimationFrame = function (...args) {
         const consoleEntry = {
           timestamp: new Date().toISOString(),
           level: "warn",
-          message: "webkitRequestAnimationFrame is deprecated. Please use requestAnimationFrame instead.",
+          message:
+            "webkitRequestAnimationFrame is deprecated. Please use requestAnimationFrame instead.",
           stackTrace: captureStackTrace(),
           pageUrl: window.location.href,
           userAgent: navigator.userAgent,
           metadata: {
             type: "deprecation_warning",
             api: "webkitRequestAnimationFrame",
-            source: "browser_generated"
-          }
+            source: "browser_generated",
+          },
         };
         addLog(consoleEntry);
         return originalDeprecatedMethod.apply(this, args);
@@ -318,8 +396,8 @@
           sourceFile: event.sourceFile,
           lineNumber: event.lineNumber,
           columnNumber: event.columnNumber,
-          source: "browser_generated"
-        }
+          source: "browser_generated",
+        },
       };
       addLog(consoleEntry);
     });
@@ -330,20 +408,24 @@
     // Monitor Performance API for failed resource loads
     const observer = new PerformanceObserver((list) => {
       list.getEntries().forEach((entry) => {
-        if (entry.entryType === 'resource') {
+        if (entry.entryType === "resource") {
           // Check if resource failed to load
-          if (entry.transferSize === 0 && entry.decodedBodySize === 0 && entry.duration > 0) {
+          if (
+            entry.transferSize === 0 &&
+            entry.decodedBodySize === 0 &&
+            entry.duration > 0
+          ) {
             // This indicates a failed resource load
             const url = entry.name;
-            
+
             // Try to determine error type based on URL and context
             let errorMessage = `GET ${url} net::ERR_BLOCKED_BY_CLIENT`;
-            
+
             // Check if it's a localhost 404 error
             if (url.includes("localhost")) {
               errorMessage = `GET ${url} 404 (Not Found)`;
             }
-            
+
             const consoleEntry = {
               timestamp: new Date().toISOString(),
               level: "error",
@@ -356,54 +438,76 @@
                 url: url,
                 source: "browser_generated",
                 duration: entry.duration,
-                transferSize: entry.transferSize
-              }
+                transferSize: entry.transferSize,
+              },
             };
             addLog(consoleEntry);
           }
         }
       });
     });
-    
+
     try {
-      observer.observe({entryTypes: ['resource']});
-    } catch (e) {
+      observer.observe({ entryTypes: ["resource"] });
+    } catch (error) {
       // Fallback if PerformanceObserver is not supported
-      console.warn('PerformanceObserver not supported, using fallback resource monitoring');
+      console.warn(
+        "PerformanceObserver not supported, using fallback resource monitoring",
+        error
+      );
     }
 
     // Also monitor for image loading errors specifically
-    document.addEventListener('error', (event) => {
-      if (event.target.tagName === 'IMG' || event.target.tagName === 'SCRIPT' || event.target.tagName === 'LINK') {
-        const url = event.target.src || event.target.href;
-        if (url) {
-          let errorMessage = `GET ${url} net::ERR_BLOCKED_BY_CLIENT`;
-          
-          // Try to determine specific error type
-          if (url.includes("localhost") && (url.includes(".jpg") || url.includes(".png") || url.includes(".css") || url.includes(".js"))) {
-            errorMessage = `GET ${url} 404 (Not Found)`;
-          } else if (url.includes("stats.") || url.includes("analytics") || url.includes("tracking") || url.includes("pusher.com")) {
-            errorMessage = `GET ${url} net::ERR_BLOCKED_BY_CLIENT`;
-          }
-          
-          const consoleEntry = {
-            timestamp: new Date().toISOString(),
-            level: "error",
-            message: errorMessage,
-            stackTrace: `    at ${event.target.tagName.toLowerCase()}:${url}`,
-            pageUrl: window.location.href,
-            userAgent: navigator.userAgent,
-            metadata: {
-              type: "resource_loading_error",
-              element_type: event.target.tagName.toLowerCase(),
-              url: url,
-              source: "browser_generated"
+    document.addEventListener(
+      "error",
+      (event) => {
+        if (
+          event.target.tagName === "IMG" ||
+          event.target.tagName === "SCRIPT" ||
+          event.target.tagName === "LINK"
+        ) {
+          const url = event.target.src || event.target.href;
+          if (url) {
+            let errorMessage = `GET ${url} net::ERR_BLOCKED_BY_CLIENT`;
+
+            // Try to determine specific error type
+            if (
+              url.includes("localhost") &&
+              (url.includes(".jpg") ||
+                url.includes(".png") ||
+                url.includes(".css") ||
+                url.includes(".js"))
+            ) {
+              errorMessage = `GET ${url} 404 (Not Found)`;
+            } else if (
+              url.includes("stats.") ||
+              url.includes("analytics") ||
+              url.includes("tracking") ||
+              url.includes("pusher.com")
+            ) {
+              errorMessage = `GET ${url} net::ERR_BLOCKED_BY_CLIENT`;
             }
-          };
-          addLog(consoleEntry);
+
+            const consoleEntry = {
+              timestamp: new Date().toISOString(),
+              level: "error",
+              message: errorMessage,
+              stackTrace: `    at ${event.target.tagName.toLowerCase()}:${url}`,
+              pageUrl: window.location.href,
+              userAgent: navigator.userAgent,
+              metadata: {
+                type: "resource_loading_error",
+                element_type: event.target.tagName.toLowerCase(),
+                url: url,
+                source: "browser_generated",
+              },
+            };
+            addLog(consoleEntry);
+          }
         }
-      }
-    }, true); // Use capture phase
+      },
+      true
+    ); // Use capture phase
   };
 
   // Initialize console method wrapping immediately
@@ -434,7 +538,7 @@
   let networkBuffer = [];
 
   const sendNetworkRequests = () => {
-    if (networkBuffer.length === 0 || !sendingEnabled || !shouldCaptureDomain)
+    if (networkBuffer.length === 0 || !sendingEnabled)
       return;
 
     const requestsToSend = [...networkBuffer];
@@ -468,8 +572,10 @@
       return false;
     }
 
-    // Allow localhost requests (they're treated like any other request now)
-    // The Browser Relay's own requests are already filtered out above
+    // Check domain filtering (from popup settings)
+    if (!shouldCaptureUrlDomain(url)) {
+      return false;
+    }
 
     // Use configuration if available
     if (networkConfig) {
@@ -584,8 +690,8 @@
       return;
     }
 
-    // Don't capture if domain not allowed
-    if (!shouldCaptureDomain) {
+    // Don't capture if URL domain not allowed
+    if (!shouldCaptureUrlDomain(requestData.url)) {
       return;
     }
 
@@ -612,7 +718,9 @@
     if (requestData.statusCode === 0) {
       // Network error (like ERR_BLOCKED_BY_CLIENT, ERR_NETWORK_CHANGED, etc.)
       const errorType = requestData.metadata?.error || "Network Error";
-      message = `${requestData.method} ${requestData.url} net::${errorType.toUpperCase()}`;
+      message = `${requestData.method} ${
+        requestData.url
+      } net::${errorType.toUpperCase()}`;
     } else if (requestData.statusCode >= 400) {
       // HTTP error status
       const statusText = getStatusText(requestData.statusCode);
@@ -633,8 +741,8 @@
           type: "network_error",
           network_request_id: requestData.requestId,
           status_code: requestData.statusCode,
-          source: "browser_generated"
-        }
+          source: "browser_generated",
+        },
       };
 
       // Add to log buffer (bypassing normal console method wrapping)
@@ -645,7 +753,7 @@
   const getStatusText = (statusCode) => {
     const statusTexts = {
       400: "Bad Request",
-      401: "Unauthorized", 
+      401: "Unauthorized",
       403: "Forbidden",
       404: "Not Found",
       405: "Method Not Allowed",
@@ -654,14 +762,14 @@
       500: "Internal Server Error",
       502: "Bad Gateway",
       503: "Service Unavailable",
-      504: "Gateway Timeout"
+      504: "Gateway Timeout",
     };
     return statusTexts[statusCode] || "Error";
   };
 
   const mapNetworkErrorToChrome = (error) => {
     const message = error.message.toLowerCase();
-    
+
     if (message.includes("failed to fetch")) {
       return "ERR_NETWORK_CHANGED";
     }
@@ -683,7 +791,7 @@
     if (message.includes("name") && message.includes("resolved")) {
       return "ERR_NAME_NOT_RESOLVED";
     }
-    
+
     return "ERR_NETWORK_CHANGED";
   };
 
@@ -703,7 +811,7 @@
         url = args[0].url;
         options = {
           method: args[0].method,
-          headers: Object.fromEntries(args[0].headers.entries()),
+          headers: serializeHeaders(args[0].headers),
           body: args[0].body,
         };
       }
@@ -754,12 +862,14 @@
       }
 
       const networkRequest = {
-        requestId: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+        requestId: `${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(2, 11)}`,
         timestamp,
         method,
         url,
-        requestHeaders: options.headers || {},
-        responseHeaders: Object.fromEntries(response.headers.entries()),
+        requestHeaders: serializeHeaders(options.headers),
+        responseHeaders: serializeHeaders(response.headers),
         requestBody: options.body ? String(options.body) : null,
         responseBody: responseBody,
         statusCode: response.status,
@@ -788,11 +898,13 @@
         const duration = Math.round(endTime - startTime);
 
         const networkRequest = {
-          requestId: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+          requestId: `${Date.now()}-${Math.random()
+            .toString(36)
+            .substring(2, 11)}`,
           timestamp,
           method,
           url,
-          requestHeaders: options.headers || {},
+          requestHeaders: serializeHeaders(options.headers),
           responseHeaders: {},
           requestBody: options.body ? String(options.body) : null,
           responseBody: null,

@@ -10,6 +10,7 @@
   const domainInputEl = document.getElementById("domain-input");
   const addDomainBtnEl = document.getElementById("add-domain-btn");
   const domainsListEl = document.getElementById("domains-list");
+  const domainErrorEl = document.getElementById("domain-error");
   const logsToggleEl = document.getElementById("logs-toggle");
   const networkToggleEl = document.getElementById("network-toggle");
   const mcpToggleEl = document.getElementById("mcp-toggle");
@@ -162,19 +163,41 @@
   };
 
   const addDomain = async () => {
-    const domain = domainInputEl.value.trim().toLowerCase();
-    if (!domain) return;
+    const input = domainInputEl.value.trim();
+    if (!input) return;
 
-    // Basic domain validation
-    if (
-      !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(
-        domain
-      )
-    ) {
-      domainInputEl.style.borderColor = "rgba(255, 107, 107, 0.5)";
-      setTimeout(() => {
-        domainInputEl.style.borderColor = "";
-      }, 2000);
+    // Normalize the input - extract hostname/domain from URL or use as-is
+    let domain = input.toLowerCase();
+    
+    // If input looks like a URL, extract the hostname
+    if (input.startsWith('http://') || input.startsWith('https://')) {
+      try {
+        const url = new URL(input);
+        domain = url.hostname + (url.port ? ':' + url.port : '');
+      } catch {
+        showDomainError("Invalid URL format");
+        return;
+      }
+    }
+    
+    // Domain validation - allow localhost, IP addresses, and regular domains
+    const isValidDomain = (domain) => {
+      // Allow localhost (with or without port)
+      if (domain.startsWith('localhost')) {
+        return /^localhost(:[0-9]+)?$/.test(domain);
+      }
+      
+      // Allow IP addresses (with or without port)
+      if (/^[0-9]/.test(domain)) {
+        return /^([0-9]{1,3}\.){3}[0-9]{1,3}(:[0-9]+)?$/.test(domain);
+      }
+      
+      // Allow regular domains (with or without port)
+      return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*?(:[0-9]+)?$/.test(domain);
+    };
+
+    if (!isValidDomain(domain)) {
+      showDomainError("Invalid domain format");
       return;
     }
 
@@ -187,6 +210,17 @@
     domainInputEl.value = "";
     await saveDomainSettings();
     updateDomainsDisplay();
+  };
+
+  const showDomainError = (message) => {
+    domainInputEl.style.borderColor = "rgba(255, 107, 107, 0.5)";
+    domainErrorEl.textContent = message;
+    domainErrorEl.style.display = "block";
+    setTimeout(() => {
+      domainInputEl.style.borderColor = "";
+      domainErrorEl.style.display = "none";
+      domainErrorEl.textContent = "";
+    }, 4000);
   };
 
   const removeDomain = async (domain) => {
@@ -614,6 +648,15 @@
   domainInputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       addDomain();
+    }
+  });
+
+  domainInputEl.addEventListener("input", () => {
+    // Clear error when user starts typing
+    if (domainErrorEl.style.display === "block") {
+      domainInputEl.style.borderColor = "";
+      domainErrorEl.style.display = "none";
+      domainErrorEl.textContent = "";
     }
   });
 

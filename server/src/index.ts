@@ -2,7 +2,8 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { createServer } from "http";
-import winston from "winston";
+import pino from "pino";
+import { formatLogEntry } from "@/utils/colorizer";
 import { logsRouter } from "@/routes/logs";
 import { networkRequestsRouter } from "@/routes/network-requests";
 import { networkConfigRouter } from "@/routes/network-config";
@@ -13,21 +14,39 @@ const app = express();
 const httpServer = createServer(app);
 const PORT = 27497;
 
-// MCP state - controlled by UI
-let mcpEnabled = false;
+// MCP state - controlled by UI, enabled by default
+let mcpEnabled = true;
 
-const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.simple(),
-    }),
-  ],
-});
+// Custom logger that uses our colorizer in development
+const createLogger = () => {
+  if (process.env.NODE_ENV === "production") {
+    return pino({ level: "info" });
+  }
+  
+  // Development logger with custom colorization
+  const logWithLevel = (level: string, message: unknown, ...args: unknown[]) => {
+    const timestamp = new Date().toISOString().replace('T', ' ').replace('Z', '');
+    
+    // Handle string messages
+    if (typeof message === 'string') {
+      const data = args.length > 0 && typeof args[0] === 'object' && args[0] !== null 
+        ? { message, ...args[0] as Record<string, unknown> } 
+        : { message };
+      console.log(formatLogEntry(level, timestamp, data));
+    } else {
+      console.log(formatLogEntry(level, timestamp, message));
+    }
+  };
+  
+  return {
+    info: (message: unknown, ...args: unknown[]) => logWithLevel('info', message, ...args),
+    warn: (message: unknown, ...args: unknown[]) => logWithLevel('warn', message, ...args),
+    error: (message: unknown, ...args: unknown[]) => logWithLevel('error', message, ...args),
+    debug: (message: unknown, ...args: unknown[]) => logWithLevel('debug', message, ...args),
+  };
+};
+
+const logger = createLogger();
 
 app.use(
   cors({
@@ -97,10 +116,8 @@ async function start() {
     await initializeDatabase();
     logger.info("Database initialized");
 
-    // Only setup MCP server if enabled via environment variable for backwards compatibility
-    // UI can enable it dynamically later
-    if (process.env.MCP_MODE === "true") {
-      mcpEnabled = true;
+    // Setup MCP server by default, can be disabled via UI
+    if (mcpEnabled) {
       await setupMCPServer();
       logger.info("MCP server initialized");
     } else {

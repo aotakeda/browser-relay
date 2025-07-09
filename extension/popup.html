@@ -261,6 +261,14 @@
         color: #666666;
       }
 
+      .domain-error {
+        color: #ff8080;
+        font-size: 12px;
+        margin-top: 4px;
+        margin-left: 4px;
+        font-weight: 500;
+      }
+
       .add-domain-btn {
         width: 32px;
         height: 32px;
@@ -594,11 +602,12 @@
             <input
               type="text"
               id="domain-input"
-              placeholder="Enter domain (e.g., github.com)"
+              placeholder="Enter domain (e.g., github.com or localhost:3000)"
               class="domain-input"
             />
             <button id="add-domain-btn" class="add-domain-btn">+</button>
           </div>
+          <div id="domain-error" class="domain-error" style="display: none;"></div>
           <div id="domains-list" class="domains-list"></div>
         </div>
 

@@ -22,8 +22,8 @@ export interface NetworkRequest {
   url: string;
   requestHeaders?: Record<string, string>;
   responseHeaders?: Record<string, string>;
-  requestBody?: string;
-  responseBody?: string;
+  requestBody?: string | null;
+  responseBody?: string | null;
   statusCode?: number;
   duration?: number;
   responseSize?: number;

@@ -57,11 +57,11 @@ logsRouter.post("/", async (req, res) => {
 
         // Use appropriate log level
         if (log.level === "error") {
-          logger.error(JSON.stringify(logData));
+          logger.error(logData);
         } else if (log.level === "warn") {
-          logger.warn(JSON.stringify(logData));
+          logger.warn(logData);
         } else {
-          logger.info(JSON.stringify(logData));
+          logger.info(logData);
         }
       });
     }

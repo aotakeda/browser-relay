@@ -48,6 +48,369 @@ describe('NetworkStorage', () => {
       expect(result[0].id).toBeDefined();
     });
 
+    describe('Request Body Capture', () => {
+      it('should store request body when provided', async () => {
+        const requestBody = JSON.stringify({ user: 'test', password: 'secret' });
+        const mockRequest = createMockRequest({ 
+          requestBody,
+          method: 'POST'
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].requestBody).toBe(requestBody);
+        
+        // Verify it's stored in database
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.requestBody).toBe(requestBody);
+      });
+
+      it('should handle null request body', async () => {
+        const mockRequest = createMockRequest({ 
+          requestBody: null,
+          method: 'GET'
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].requestBody).toBeNull();
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.requestBody).toBeNull();
+      });
+
+      it('should handle undefined request body', async () => {
+        const mockRequest = createMockRequest({ 
+          requestBody: undefined,
+          method: 'GET'
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].requestBody).toBeUndefined();
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.requestBody).toBeNull();
+      });
+
+      it('should truncate large request bodies', async () => {
+        const largeRequestBody = 'x'.repeat(1024 * 1024 + 100); // 1MB + 100 bytes
+        const mockRequest = createMockRequest({ 
+          requestBody: largeRequestBody,
+          method: 'POST'
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].requestBody).toBe('x'.repeat(1024 * 1024) + '... [truncated]');
+        expect(result[0].requestBody!.length).toBeLessThan(largeRequestBody.length);
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.requestBody).toBe('x'.repeat(1024 * 1024) + '... [truncated]');
+      });
+
+      it('should handle form data request bodies', async () => {
+        const formData = 'username=test&password=secret&csrf_token=abc123';
+        const mockRequest = createMockRequest({ 
+          requestBody: formData,
+          method: 'POST',
+          requestHeaders: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].requestBody).toBe(formData);
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.requestBody).toBe(formData);
+      });
+
+      it('should handle binary request bodies', async () => {
+        const binaryData = Buffer.from([0x89, 0x50, 0x4E, 0x47]).toString('base64');
+        const mockRequest = createMockRequest({ 
+          requestBody: binaryData,
+          method: 'POST',
+          requestHeaders: { 'Content-Type': 'application/octet-stream' }
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].requestBody).toBe(binaryData);
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.requestBody).toBe(binaryData);
+      });
+    });
+
+    describe('Response Body Capture', () => {
+      it('should store response body when provided', async () => {
+        const responseBody = JSON.stringify({ success: true, data: [] });
+        const mockRequest = createMockRequest({ 
+          responseBody,
+          statusCode: 200
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].responseBody).toBe(responseBody);
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.responseBody).toBe(responseBody);
+      });
+
+      it('should handle null response body', async () => {
+        const mockRequest = createMockRequest({ 
+          responseBody: null,
+          statusCode: 204
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].responseBody).toBeNull();
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.responseBody).toBeNull();
+      });
+
+      it('should handle undefined response body', async () => {
+        const mockRequest = createMockRequest({ 
+          responseBody: undefined,
+          statusCode: 200
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].responseBody).toBeUndefined();
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.responseBody).toBeNull();
+      });
+
+      it('should truncate large response bodies', async () => {
+        const largeResponseBody = 'y'.repeat(1024 * 1024 + 100); // 1MB + 100 bytes
+        const mockRequest = createMockRequest({ 
+          responseBody: largeResponseBody,
+          statusCode: 200
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].responseBody).toBe('y'.repeat(1024 * 1024) + '... [truncated]');
+        expect(result[0].responseBody!.length).toBeLessThan(largeResponseBody.length);
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.responseBody).toBe('y'.repeat(1024 * 1024) + '... [truncated]');
+      });
+
+      it('should handle HTML response bodies', async () => {
+        const htmlResponse = '<html><body><h1>Hello World</h1></body></html>';
+        const mockRequest = createMockRequest({ 
+          responseBody: htmlResponse,
+          statusCode: 200,
+          responseHeaders: { 'Content-Type': 'text/html' }
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].responseBody).toBe(htmlResponse);
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.responseBody).toBe(htmlResponse);
+      });
+
+      it('should handle XML response bodies', async () => {
+        const xmlResponse = '<?xml version="1.0"?><root><item>data</item></root>';
+        const mockRequest = createMockRequest({ 
+          responseBody: xmlResponse,
+          statusCode: 200,
+          responseHeaders: { 'Content-Type': 'application/xml' }
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].responseBody).toBe(xmlResponse);
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.responseBody).toBe(xmlResponse);
+      });
+
+      it('should handle empty response bodies', async () => {
+        const mockRequest = createMockRequest({ 
+          responseBody: '',
+          statusCode: 204
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].responseBody).toBe('');
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.responseBody).toBe('');
+      });
+
+      it('should handle response body with special characters', async () => {
+        const specialCharResponse = '{"message": "Hello 世界! 🌍", "emoji": "🚀"}';
+        const mockRequest = createMockRequest({ 
+          responseBody: specialCharResponse,
+          statusCode: 200,
+          responseHeaders: { 'Content-Type': 'application/json; charset=utf-8' }
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].responseBody).toBe(specialCharResponse);
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.responseBody).toBe(specialCharResponse);
+      });
+    });
+
+    describe('Size Limits and Truncation', () => {
+      it('should respect maximum request body size limit', async () => {
+        // Test exactly at the limit
+        const exactLimitBody = 'x'.repeat(1024 * 1024); // Exactly 1MB
+        const mockRequest = createMockRequest({ 
+          requestBody: exactLimitBody,
+          method: 'POST'
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].requestBody).toBe(exactLimitBody);
+        expect(result[0].requestBody!.length).toBe(1024 * 1024);
+      });
+
+      it('should respect maximum response body size limit', async () => {
+        // Test exactly at the limit
+        const exactLimitBody = 'y'.repeat(1024 * 1024); // Exactly 1MB
+        const mockRequest = createMockRequest({ 
+          responseBody: exactLimitBody,
+          statusCode: 200
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].responseBody).toBe(exactLimitBody);
+        expect(result[0].responseBody!.length).toBe(1024 * 1024);
+      });
+
+      it('should truncate both request and response bodies when both are large', async () => {
+        const largeRequestBody = 'a'.repeat(1024 * 1024 + 50);
+        const largeResponseBody = 'b'.repeat(1024 * 1024 + 100);
+        
+        const mockRequest = createMockRequest({ 
+          requestBody: largeRequestBody,
+          responseBody: largeResponseBody,
+          method: 'POST',
+          statusCode: 200
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].requestBody).toBe('a'.repeat(1024 * 1024) + '... [truncated]');
+        expect(result[0].responseBody).toBe('b'.repeat(1024 * 1024) + '... [truncated]');
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.requestBody).toBe('a'.repeat(1024 * 1024) + '... [truncated]');
+        expect(retrieved!.responseBody).toBe('b'.repeat(1024 * 1024) + '... [truncated]');
+      });
+
+      it('should handle edge case of empty strings vs null', async () => {
+        const mockRequest = createMockRequest({ 
+          requestBody: '',
+          responseBody: '',
+          method: 'POST',
+          statusCode: 200
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].requestBody).toBe('');
+        expect(result[0].responseBody).toBe('');
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.requestBody).toBe('');
+        expect(retrieved!.responseBody).toBe('');
+      });
+    });
+
+    describe('Headers and Metadata Storage', () => {
+      it('should store request headers when provided', async () => {
+        const requestHeaders = {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer token123',
+          'X-Custom-Header': 'custom-value'
+        };
+        
+        const mockRequest = createMockRequest({ 
+          requestHeaders,
+          method: 'POST'
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].requestHeaders).toEqual(requestHeaders);
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.requestHeaders).toEqual(requestHeaders);
+      });
+
+      it('should store response headers when provided', async () => {
+        const responseHeaders = {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Rate-Limit': '100'
+        };
+        
+        const mockRequest = createMockRequest({ 
+          responseHeaders,
+          statusCode: 200
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].responseHeaders).toEqual(responseHeaders);
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.responseHeaders).toEqual(responseHeaders);
+      });
+
+      it('should store metadata when provided', async () => {
+        const metadata = {
+          source: 'fetch',
+          intercepted: true,
+          requestSize: 500,
+          responseSize: 1200
+        };
+        
+        const mockRequest = createMockRequest({ metadata });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].metadata).toEqual(metadata);
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.metadata).toEqual(metadata);
+      });
+
+      it('should handle null/undefined headers gracefully', async () => {
+        const mockRequest = createMockRequest({ 
+          requestHeaders: undefined,
+          responseHeaders: undefined,
+          method: 'GET'
+        });
+        
+        const result = await networkStorage.insertRequests([mockRequest]);
+        
+        expect(result[0].requestHeaders).toBeUndefined();
+        expect(result[0].responseHeaders).toBeUndefined();
+        
+        const retrieved = await networkStorage.getRequestById(result[0].id!);
+        expect(retrieved!.requestHeaders).toBeUndefined();
+        expect(retrieved!.responseHeaders).toBeUndefined();
+      });
+    });
+
     it('should insert multiple network requests', async () => {
       const mockRequests = [
         createMockRequest({ requestId: 'req-1', url: 'https://example.com/api/1' }),

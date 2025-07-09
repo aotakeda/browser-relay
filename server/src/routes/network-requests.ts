@@ -65,127 +65,83 @@ function processBodyForJSON(body: string | undefined): unknown {
   }
 }
 
-function isNoiseRequest(request: NetworkRequest): boolean {
-  const url = request.url.toLowerCase();
-  const pathname = new URL(request.url).pathname.toLowerCase();
-
-  // Filter out common noise patterns
-  const noisePatterns = [
-    // Images and media
-    /\.(png|jpg|jpeg|gif|svg|webp|ico|avif)$/,
-    /\.(mp4|webm|ogg|mp3|wav)$/,
-    // Fonts
-    /\.(woff|woff2|ttf|eot)$/,
-    // CSS and static assets
-    /\.css$/,
-    /\/static\//,
-    /\/assets\//,
-    // Analytics and tracking
-    /google-analytics/,
-    /googletagmanager/,
-    /facebook\.com\/tr/,
-    /doubleclick/,
-    /scorecardresearch/,
-    /track|analytics|telemetry/,
-    // CDN and caching
-    /cloudflare/,
-    /amazonaws\.com/,
-    /\.glbimg\.com.*\.(png|jpg|jpeg|gif|svg|webp|ico|avif)$/,
-  ];
-
-  // Check if URL matches any noise pattern
-  if (
-    noisePatterns.some((pattern) => pattern.test(url) || pattern.test(pathname))
-  ) {
-    return true;
-  }
-
-  // Filter out very long encoded strings (tracking data)
-  if (request.requestBody) {
-    const hasLongEncodedString = /[a-zA-Z0-9+/=]{200,}/.test(
-      request.requestBody
-    );
-    if (hasLongEncodedString) return true;
-  }
-
-  // Filter out tracking URLs with lots of encoded parameters
-  if (url.includes("track") || url.includes("analytics")) {
-    const hasEncodedParams = /[a-zA-Z0-9+/=%]{100,}/.test(url);
-    if (hasEncodedParams) return true;
-  }
-
-  return false;
-}
-
 function shouldCaptureRequest(request: NetworkRequest): boolean {
   const config = getCurrentNetworkConfig();
-  
+
   // If network capture is disabled, don't capture
   if (!config.enabled) {
     return false;
   }
-  
+
   // Check method filter
   if (config.methods.length > 0 && !config.methods.includes(request.method)) {
     return false;
   }
-  
+
   // Check status code filter
-  if (config.statusCodes.length > 0 && request.statusCode && !config.statusCodes.includes(request.statusCode)) {
+  if (
+    config.statusCodes.length > 0 &&
+    request.statusCode &&
+    !config.statusCodes.includes(request.statusCode)
+  ) {
     return false;
   }
-  
+
   // Check URL patterns
   if (config.urlPatterns.length > 0) {
     const url = request.url.toLowerCase();
-    const shouldInclude = config.urlPatterns.some(pattern => {
+    const shouldInclude = config.urlPatterns.some((pattern) => {
       try {
-        const regex = new RegExp(pattern, 'i');
+        const regex = new RegExp(pattern, "i");
         return regex.test(url);
       } catch {
         // If regex is invalid, treat as literal string match
         return url.includes(pattern.toLowerCase());
       }
     });
-    
-    if (config.captureMode === 'include' && !shouldInclude) {
+
+    if (config.captureMode === "include" && !shouldInclude) {
       return false;
     }
-    
-    if (config.captureMode === 'exclude' && shouldInclude) {
+
+    if (config.captureMode === "exclude" && shouldInclude) {
       return false;
     }
   }
-  
+
   return true;
 }
 
 function processRequestWithConfig(request: NetworkRequest): NetworkRequest {
   const config = getCurrentNetworkConfig();
   const processedRequest = { ...request };
-  
+
   // Remove headers if not configured to capture
   if (!config.includeHeaders) {
     delete processedRequest.requestHeaders;
     delete processedRequest.responseHeaders;
   }
-  
+
   // Remove request body if not configured to capture
   if (!config.includeRequestBody) {
     delete processedRequest.requestBody;
   }
-  
+
   // Remove response body if not configured to capture
   if (!config.includeResponseBody) {
     delete processedRequest.responseBody;
-  } else if (processedRequest.responseBody && processedRequest.responseBody.length > config.maxResponseBodySize) {
+  } else if (
+    processedRequest.responseBody &&
+    processedRequest.responseBody.length > config.maxResponseBodySize
+  ) {
     // Truncate response body to configured size
-    processedRequest.responseBody = processedRequest.responseBody.substring(0, config.maxResponseBodySize) + '... [truncated by config]';
+    processedRequest.responseBody =
+      processedRequest.responseBody.substring(0, config.maxResponseBodySize) +
+      "... [truncated by config]";
   }
-  
+
   return processedRequest;
 }
-
 
 export const networkRequestsRouter: Router = Router();
 
@@ -201,36 +157,33 @@ networkRequestsRouter.post("/", async (req, res) => {
     }
 
     // Filter out Browser Relay's own network requests and apply configuration
-    const filteredRequests = batch.requests.filter((request) => {
-      // Filter out ALL requests to our own server (port 27497)
-      if (request.url.includes("localhost:27497")) {
-        return false;
-      }
+    const filteredRequests = batch.requests
+      .filter((request) => {
+        // Filter out ALL requests to our own server (port 27497)
+        if (request.url.includes("localhost:27497")) {
+          return false;
+        }
 
-      // Filter out Browser Relay's own health check requests for port detection
-      if (
-        request.url.includes("localhost:") &&
-        request.url.includes("/health-browser-relay")
-      ) {
-        return false;
-      }
+        // Filter out Browser Relay's own health check requests for port detection
+        if (
+          request.url.includes("localhost:") &&
+          request.url.includes("/health-browser-relay")
+        ) {
+          return false;
+        }
 
-      // Filter out extension and other noise
-      if (
-        request.url.includes("browser-relay") ||
-        request.pageUrl.includes("chrome-extension://")
-      ) {
-        return false;
-      }
+        // Filter out extension and other noise
+        if (
+          request.url.includes("browser-relay") ||
+          request.pageUrl.includes("chrome-extension://")
+        ) {
+          return false;
+        }
 
-      // Apply noise filtering
-      if (isNoiseRequest(request)) {
-        return false;
-      }
-
-      // Apply configuration-based filtering
-      return shouldCaptureRequest(request);
-    }).map(processRequestWithConfig);
+        // Apply configuration-based filtering
+        return shouldCaptureRequest(request);
+      })
+      .map(processRequestWithConfig);
 
     // Log network requests for LLM visibility (if enabled)
     if (process.env.LOG_NETWORK_REQUESTS !== "false") {
@@ -281,9 +234,9 @@ networkRequestsRouter.post("/", async (req, res) => {
 
         // Use appropriate log level based on status
         if (request.statusCode && request.statusCode >= 400) {
-          logger.error(JSON.stringify(logData));
+          logger.error(logData);
         } else {
-          logger.info(JSON.stringify(logData));
+          logger.info(logData);
         }
       });
     }
@@ -331,7 +284,10 @@ networkRequestsRouter.get("/", async (req, res) => {
 
     // Sort by timestamp (most recent first)
     const allRequests = dbRequests
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )
       .slice(0, parseInt(limit as string));
 
     res.json({ requests: allRequests });
@@ -376,7 +332,7 @@ networkRequestsRouter.get("/:id", async (req, res) => {
 networkRequestsRouter.delete("/", async (_req, res) => {
   try {
     const dbCount = await networkStorage.clearRequests();
-    
+
     logger.info(`Cleared ${dbCount} network requests from database`);
     res.json({ cleared: dbCount });
   } catch (error) {

@@ -10,7 +10,6 @@
 - **Network Request Monitoring**: HTTP requests with headers, request/response bodies, and timing data
 - **Response Body Capture**: Full response content for JSON, HTML, XML, and JavaScript requests
 - **LLM-Optimized Output**: Structured JSON logs designed for AI assistant analysis
-- **Smart Noise Filtering**: Automatically filters out images, tracking, and irrelevant requests
 - **Domain Filtering**: Capture logs only from specified domains
 - **Local HTTP Server**: Express.js server with SQLite storage (runs on port 27497) - no external connections
 - **MCP Integration**: Access logs via Model Context Protocol tools in AI assistants (Claude, Cursor, etc.)
@@ -28,15 +27,11 @@
 npm install
 ```
 
-### 2. Build and Start
+### 2. Start the Server
 
 ```bash
-# Development mode with auto-reload
+# Development mode with auto-reload (builds everything automatically)
 npm run dev
-
-# Or build and start production mode
-npm run build
-npm start
 ```
 
 The server will start on `http://localhost:27497` (fixed port, not configurable)
@@ -165,39 +160,52 @@ Browser Relay outputs all logs and network requests in structured JSON format fo
 
 ## MCP Integration
 
-### Installing MCP in Claude Code, Cursor, etc.
+### Using with Claude Code
 
-**Option 1: Simple Installation in Claude Code:**
+The MCP server allows you to access captured logs directly from Claude Code for analysis and debugging. The MCP server is enabled by default when you start the Browser Relay server and shares the same database as the main server.
+
+**Prerequisites:**
+
+1. Start the server: `npm run dev` (builds everything automatically)
+2. Ensure the Chrome extension is capturing data
+
+**Installation:**
+
+Use the Claude Code CLI to add the MCP server:
 
 ```bash
-claude mcp add browser-relay -- npx -y browser-relay
+claude mcp add browser-relay node /full/path/to/browser-relay/server/dist-mcp/mcp-standalone.js
 ```
 
-**Manual Installation:**
+Replace `/full/path/to` with the actual path to your project directory.
 
-1. Build the server:
+**Alternative Installation Methods:**
 
-   ```bash
-   npm run build
-   ```
+For project-specific configuration (shared with team):
 
-2. Add to your Claude Code MCP configuration:
+```bash
+claude mcp add browser-relay node /Users/arthurtakeda/console/server/dist-mcp/mcp-standalone.js --scope project
+```
 
-   ```json
-   {
-     "mcpServers": {
-       "browser-relay": {
-         "command": "node",
-         "args": ["path/to/browser-relay/server/dist/index.js"],
-         "env": {
-           "MCP_MODE": "true"
-         }
-       }
-     }
-   }
-   ```
+For user-wide configuration (available in all projects):
 
-3. Restart Claude Code to load the MCP server.
+```bash
+claude mcp add browser-relay node /Users/arthurtakeda/console/server/dist-mcp/mcp-standalone.js --scope user
+```
+
+**Verify Installation:**
+
+```bash
+claude mcp list
+```
+
+You should see `browser-relay` in the list of configured servers.
+
+**Remove Server:**
+
+```bash
+claude mcp remove browser-relay
+```
 
 ### Available MCP Tools
 
@@ -324,14 +332,20 @@ browser-relay/
 # Install all dependencies
 npm install
 
-# Development mode (watches files, rebuilds automatically)
+# Development mode (builds everything automatically, watches files)
 npm run dev
 
-# Build everything
+# Production mode (builds everything automatically)
+npm start
+
+# Build everything manually
 npm run build
 
-# Start production server
-npm start
+# Build only MCP server
+npm run build:mcp
+
+# Build both HTTP and MCP servers
+npm run build:all
 
 # Run all tests
 npm test
@@ -374,7 +388,7 @@ All settings are saved automatically and persist across browser sessions. No ser
 ### Console Log Capture
 
 1. **Extension** injects scripts that wrap `console.log`, `console.warn`, `console.error`, and `console.info`
-2. **Smart Filtering** automatically excludes Browser Relay's own logs and noise
+2. **Smart Filtering** automatically excludes Browser Relay's own logs
 3. **Page Load Optimization** buffers logs during page load, sends after completion
 4. **Structured Data** includes timestamp, message, stack trace, page URL, and browser info
 

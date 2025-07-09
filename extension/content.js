@@ -11,9 +11,27 @@
     }
 
     const hostname = window.location.hostname;
-    return specificDomains.some(
-      (domain) => hostname === domain || hostname.endsWith("." + domain)
-    );
+    const port = window.location.port;
+    const hostWithPort = port ? `${hostname}:${port}` : hostname;
+    
+    return specificDomains.some((domain) => {
+      // First check exact match with host:port
+      if (hostWithPort === domain) {
+        return true;
+      }
+      
+      // Then check hostname-only match (for domains without ports)
+      if (hostname === domain) {
+        return true;
+      }
+      
+      // Finally check subdomain match (for domains without ports)
+      if (hostname.endsWith("." + domain)) {
+        return true;
+      }
+      
+      return false;
+    });
   };
 
   // Listen for logs from the main world script

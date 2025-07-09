@@ -40,12 +40,15 @@ networkConfigRouter.post("/", async (req, res) => {
   try {
     const newConfig: Partial<NetworkCaptureConfig> = req.body;
 
-    // Validate required fields
-    if (
-      typeof newConfig.enabled !== "undefined" &&
-      typeof newConfig.enabled !== "boolean"
-    ) {
-      return res.status(400).json({ error: "enabled must be a boolean" });
+    // Validate boolean fields
+    const booleanFields = ['enabled', 'includeHeaders', 'includeRequestBody', 'includeResponseBody', 'includeQueryParams'] as const;
+    for (const field of booleanFields) {
+      if (
+        typeof newConfig[field] !== "undefined" &&
+        typeof newConfig[field] !== "boolean"
+      ) {
+        return res.status(400).json({ error: `${field} must be a boolean` });
+      }
     }
 
     if (
@@ -57,20 +60,16 @@ networkConfigRouter.post("/", async (req, res) => {
         .json({ error: "captureMode must be 'all', 'include', or 'exclude'" });
     }
 
-    if (newConfig.urlPatterns && !Array.isArray(newConfig.urlPatterns)) {
-      return res.status(400).json({ error: "urlPatterns must be an array" });
-    }
-
-    if (newConfig.methods && !Array.isArray(newConfig.methods)) {
-      return res.status(400).json({ error: "methods must be an array" });
-    }
-
-    if (newConfig.statusCodes && !Array.isArray(newConfig.statusCodes)) {
-      return res.status(400).json({ error: "statusCodes must be an array" });
+    // Validate array fields
+    const arrayFields = ['urlPatterns', 'methods', 'statusCodes'] as const;
+    for (const field of arrayFields) {
+      if (newConfig[field] && !Array.isArray(newConfig[field])) {
+        return res.status(400).json({ error: `${field} must be an array` });
+      }
     }
 
     if (
-      newConfig.maxResponseBodySize &&
+      typeof newConfig.maxResponseBodySize !== "undefined" &&
       (typeof newConfig.maxResponseBodySize !== "number" ||
         newConfig.maxResponseBodySize < 0)
     ) {

@@ -12,22 +12,19 @@ jest.mock('@/mcp/server', () => ({
   setupMCPServer: jest.fn().mockResolvedValue(undefined)
 }));
 
-// Mock winston logger
-jest.mock('winston', () => ({
-  createLogger: jest.fn(() => ({
+// Mock pino logger
+jest.mock('pino', () => {
+  return jest.fn(() => ({
     info: jest.fn(),
     warn: jest.fn(),
-    error: jest.fn()
-  })),
-  format: {
-    combine: jest.fn(),
-    timestamp: jest.fn(),
-    json: jest.fn(),
-    simple: jest.fn()
-  },
-  transports: {
-    Console: jest.fn()
-  }
+    error: jest.fn(),
+    debug: jest.fn()
+  }));
+});
+
+// Mock colorizer
+jest.mock('@/utils/colorizer', () => ({
+  formatLogEntry: jest.fn((level, timestamp, data) => `[${level}] ${timestamp}: ${JSON.stringify(data)}`)
 }));
 
 // Mock routes with basic functionality
