@@ -2,6 +2,30 @@ import { EventEmitter } from 'events';
 import { ConsoleLog } from '@/types';
 import { runAsync, allAsync, getAsync, CountResult } from '@/storage/database';
 
+// Simple mutex to prevent concurrent transactions
+let isInsertLocked = false;
+const insertQueue: Array<() => void> = [];
+
+const acquireInsertLock = async (): Promise<void> => {
+  return new Promise((resolve) => {
+    if (!isInsertLocked) {
+      isInsertLocked = true;
+      resolve();
+    } else {
+      insertQueue.push(resolve);
+    }
+  });
+};
+
+const releaseInsertLock = (): void => {
+  isInsertLocked = false;
+  const next = insertQueue.shift();
+  if (next) {
+    isInsertLocked = true;
+    next();
+  }
+};
+
 // Create a simple logger to avoid circular imports
 const logger = {
   warn: (message: string, ...args: unknown[]) => console.warn(message, ...args),
@@ -45,9 +69,11 @@ const tryStringifyJSON = (obj: unknown): string | null => {
 };
 
 export const insertLogs = async (logs: ConsoleLog[]): Promise<ConsoleLog[]> => {
-  const insertedLogs: ConsoleLog[] = [];
+  await acquireInsertLock();
   
   try {
+    const insertedLogs: ConsoleLog[] = [];
+    
     await runAsync('BEGIN TRANSACTION');
     
     for (const log of logs) {
@@ -76,16 +102,23 @@ export const insertLogs = async (logs: ConsoleLog[]): Promise<ConsoleLog[]> => {
       logEmitter.emit('newLog', insertedLog);
     }
     
+    await runAsync('COMMIT');
+    
+    // Run circular buffer enforcement after the transaction completes
     await enforceCircularBuffer();
     
-    await runAsync('COMMIT');
+    return insertedLogs;
   } catch (error) {
-    await runAsync('ROLLBACK');
+    try {
+      await runAsync('ROLLBACK');
+    } catch (rollbackError) {
+      logger.error('Failed to rollback transaction:', rollbackError);
+    }
     logger.error('Failed to insert logs:', error);
     throw error;
+  } finally {
+    releaseInsertLock();
   }
-  
-  return insertedLogs;
 };
 
 const enforceCircularBuffer = async (): Promise<void> => {

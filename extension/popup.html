@@ -502,6 +502,13 @@
         width: 100%;
       }
 
+      .network-options {
+        margin-top: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
       .loading {
         display: none;
         align-items: center;
@@ -525,6 +532,21 @@
         100% {
           transform: rotate(360deg);
         }
+      }
+
+      .max-body-size-input {
+        width: 30px;
+        padding-right: 8px;
+        flex: unset;
+      }
+
+      .max-body-size-input::-webkit-outer-spin-button,
+      .max-body-size-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      .max-body-size-input {
+        -moz-appearance: textfield;
       }
     </style>
   </head>
@@ -598,7 +620,10 @@
         </div>
 
         <div class="toggle-container">
-          <div class="toggle-label">Network Requests</div>
+          <div class="toggle-label">
+            Network Requests
+            <div class="toggle-subtitle">Basic network capture</div>
+          </div>
           <div
             id="network-toggle"
             class="toggle"
@@ -606,6 +631,126 @@
             aria-checked="true"
             tabindex="0"
           ></div>
+        </div>
+
+        <div
+          id="network-config-section"
+          class="domains-section"
+          style="display: none"
+        >
+          <div class="domains-header">
+            <span class="domains-title">Network Capture Settings</span>
+          </div>
+
+          <div class="domain-mode-toggle">
+            <div class="toggle-container-small">
+              <span class="toggle-label-small">All Requests</span>
+              <div
+                id="capture-mode-toggle"
+                class="toggle toggle-small"
+                role="switch"
+                aria-checked="true"
+                tabindex="0"
+              ></div>
+              <span class="toggle-label-small">Filtered</span>
+            </div>
+          </div>
+
+          <div
+            id="network-filters"
+            class="specific-domains"
+            style="display: none"
+          >
+            <div class="domain-input-container">
+              <input
+                type="text"
+                id="url-pattern-input"
+                placeholder="URL pattern (e.g., api.*, *.json)"
+                class="domain-input"
+              />
+              <button id="add-pattern-btn" class="add-domain-btn">+</button>
+            </div>
+            <div id="url-patterns-list" class="domains-list"></div>
+
+            <div style="margin-top: 12px">
+              <div class="toggle-container-small">
+                <span class="toggle-label-small">Include</span>
+                <div
+                  id="filter-mode-toggle"
+                  class="toggle toggle-small"
+                  role="switch"
+                  aria-checked="false"
+                  tabindex="0"
+                ></div>
+                <span class="toggle-label-small">Exclude</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="network-options">
+            <div class="toggle-container">
+              <div class="toggle-label">
+                Include Headers
+                <div class="toggle-subtitle">
+                  Capture request/response headers
+                </div>
+              </div>
+              <div
+                id="headers-toggle"
+                class="toggle enabled"
+                role="switch"
+                aria-checked="true"
+                tabindex="0"
+              ></div>
+            </div>
+
+            <div class="toggle-container">
+              <div class="toggle-label">
+                Include Request Body
+                <div class="toggle-subtitle">Capture request payload data</div>
+              </div>
+              <div
+                id="request-body-toggle"
+                class="toggle enabled"
+                role="switch"
+                aria-checked="true"
+                tabindex="0"
+              ></div>
+            </div>
+
+            <div class="toggle-container">
+              <div class="toggle-label">
+                Include Response Body
+                <div class="toggle-subtitle">Capture response payload data</div>
+              </div>
+              <div
+                id="response-body-toggle"
+                class="toggle enabled"
+                role="switch"
+                aria-checked="true"
+                tabindex="0"
+              ></div>
+            </div>
+
+            <div class="toggle-container">
+              <div class="toggle-label">
+                Max Response Size
+                <div class="toggle-subtitle">
+                  Response body size limit in thousands of bytes
+                </div>
+              </div>
+              <input
+                type="number"
+                id="max-body-size"
+                value="50"
+                min="1"
+                max="1000"
+                step="1"
+                class="domain-input max-body-size-input"
+                style="text-align: right; margin-left: 20px"
+              />
+            </div>
+          </div>
         </div>
 
         <div class="toggle-container">
@@ -618,6 +763,7 @@
             tabindex="0"
           ></div>
         </div>
+
 
         <div class="button-group">
           <button id="clear-logs" class="button danger">

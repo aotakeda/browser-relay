@@ -5,6 +5,7 @@ import { createServer } from "http";
 import winston from "winston";
 import { logsRouter } from "@/routes/logs";
 import { networkRequestsRouter } from "@/routes/network-requests";
+import { networkConfigRouter } from "@/routes/network-config";
 import { initializeDatabase } from "@/storage/database";
 import { setupMCPServer } from "@/mcp/server";
 
@@ -37,8 +38,10 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 
+
 app.use("/logs", logsRouter);
 app.use("/network-requests", networkRequestsRouter);
+app.use("/network-config", networkConfigRouter);
 
 // Health check endpoint for Browser Relay extension port detection
 app.get("/health-browser-relay", (_req, res) => {
@@ -48,6 +51,7 @@ app.get("/health-browser-relay", (_req, res) => {
     port: PORT,
   });
 });
+
 
 // Keep the standard health endpoint for general use
 app.get("/health", (_req, res) => {

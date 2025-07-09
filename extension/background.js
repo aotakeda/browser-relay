@@ -82,7 +82,7 @@ const sendLogsToServer = async (logs) => {
     // Reset retry count on success
     retryCount = 0;
     return await response.json();
-  } catch {
+  } catch (error) {
     throw error;
   }
 };
@@ -127,7 +127,7 @@ const sendNetworkRequestsToServer = async (requests) => {
     }
 
     return await response.json();
-  } catch {
+  } catch (error) {
     throw error;
   }
 };

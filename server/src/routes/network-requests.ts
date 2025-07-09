@@ -2,6 +2,7 @@ import { Router } from "express";
 import { networkStorage } from "@/storage/NetworkStorage";
 import { NetworkRequest, NetworkRequestBatch } from "@/types";
 import { logger } from "@/index";
+import { getCurrentNetworkConfig } from "@/routes/network-config";
 
 function getStatusCategory(statusCode: number | undefined): string {
   if (!statusCode) return "pending";
@@ -116,6 +117,75 @@ function isNoiseRequest(request: NetworkRequest): boolean {
   return false;
 }
 
+function shouldCaptureRequest(request: NetworkRequest): boolean {
+  const config = getCurrentNetworkConfig();
+  
+  // If network capture is disabled, don't capture
+  if (!config.enabled) {
+    return false;
+  }
+  
+  // Check method filter
+  if (config.methods.length > 0 && !config.methods.includes(request.method)) {
+    return false;
+  }
+  
+  // Check status code filter
+  if (config.statusCodes.length > 0 && request.statusCode && !config.statusCodes.includes(request.statusCode)) {
+    return false;
+  }
+  
+  // Check URL patterns
+  if (config.urlPatterns.length > 0) {
+    const url = request.url.toLowerCase();
+    const shouldInclude = config.urlPatterns.some(pattern => {
+      try {
+        const regex = new RegExp(pattern, 'i');
+        return regex.test(url);
+      } catch {
+        // If regex is invalid, treat as literal string match
+        return url.includes(pattern.toLowerCase());
+      }
+    });
+    
+    if (config.captureMode === 'include' && !shouldInclude) {
+      return false;
+    }
+    
+    if (config.captureMode === 'exclude' && shouldInclude) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+function processRequestWithConfig(request: NetworkRequest): NetworkRequest {
+  const config = getCurrentNetworkConfig();
+  const processedRequest = { ...request };
+  
+  // Remove headers if not configured to capture
+  if (!config.includeHeaders) {
+    delete processedRequest.requestHeaders;
+    delete processedRequest.responseHeaders;
+  }
+  
+  // Remove request body if not configured to capture
+  if (!config.includeRequestBody) {
+    delete processedRequest.requestBody;
+  }
+  
+  // Remove response body if not configured to capture
+  if (!config.includeResponseBody) {
+    delete processedRequest.responseBody;
+  } else if (processedRequest.responseBody && processedRequest.responseBody.length > config.maxResponseBodySize) {
+    // Truncate response body to configured size
+    processedRequest.responseBody = processedRequest.responseBody.substring(0, config.maxResponseBodySize) + '... [truncated by config]';
+  }
+  
+  return processedRequest;
+}
+
 
 export const networkRequestsRouter: Router = Router();
 
@@ -130,7 +200,7 @@ networkRequestsRouter.post("/", async (req, res) => {
         .json({ error: "Invalid network request batch format" });
     }
 
-    // Filter out Browser Relay's own network requests and noise
+    // Filter out Browser Relay's own network requests and apply configuration
     const filteredRequests = batch.requests.filter((request) => {
       // Filter out ALL requests to our own server (port 27497)
       if (request.url.includes("localhost:27497")) {
@@ -153,8 +223,14 @@ networkRequestsRouter.post("/", async (req, res) => {
         return false;
       }
 
-      return !isNoiseRequest(request);
-    });
+      // Apply noise filtering
+      if (isNoiseRequest(request)) {
+        return false;
+      }
+
+      // Apply configuration-based filtering
+      return shouldCaptureRequest(request);
+    }).map(processRequestWithConfig);
 
     // Log network requests for LLM visibility (if enabled)
     if (process.env.LOG_NETWORK_REQUESTS !== "false") {
@@ -247,13 +323,18 @@ networkRequestsRouter.get("/", async (req, res) => {
       endTime: endTime as string,
     };
 
-    const requests = await networkStorage.getRequests(
+    const dbRequests = await networkStorage.getRequests(
       parseInt(limit as string),
       parseInt(offset as string),
       filters
     );
 
-    res.json({ requests });
+    // Sort by timestamp (most recent first)
+    const allRequests = dbRequests
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, parseInt(limit as string));
+
+    res.json({ requests: allRequests });
   } catch (error) {
     logger.error("Error fetching network requests:", error);
     res.status(500).json({ error: "Failed to fetch network requests" });
@@ -294,9 +375,10 @@ networkRequestsRouter.get("/:id", async (req, res) => {
 
 networkRequestsRouter.delete("/", async (_req, res) => {
   try {
-    const count = await networkStorage.clearRequests();
-    logger.info(`Cleared ${count} network requests`);
-    res.json({ cleared: count });
+    const dbCount = await networkStorage.clearRequests();
+    
+    logger.info(`Cleared ${dbCount} network requests from database`);
+    res.json({ cleared: dbCount });
   } catch (error) {
     logger.error("Error clearing network requests:", error);
     res.status(500).json({ error: "Failed to clear network requests" });

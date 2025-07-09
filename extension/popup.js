@@ -15,6 +15,20 @@
   const mcpToggleEl = document.getElementById("mcp-toggle");
   const clearLogsBtn = document.getElementById("clear-logs");
   const clearNetworkBtn = document.getElementById("clear-network");
+  
+  // Network configuration elements
+  const networkConfigSectionEl = document.getElementById("network-config-section");
+  const captureModeToggleEl = document.getElementById("capture-mode-toggle");
+  const networkFiltersEl = document.getElementById("network-filters");
+  const urlPatternInputEl = document.getElementById("url-pattern-input");
+  const addPatternBtnEl = document.getElementById("add-pattern-btn");
+  const urlPatternsListEl = document.getElementById("url-patterns-list");
+  const filterModeToggleEl = document.getElementById("filter-mode-toggle");
+  const headersToggleEl = document.getElementById("headers-toggle");
+  const requestBodyToggleEl = document.getElementById("request-body-toggle");
+  const responseBodyToggleEl = document.getElementById("response-body-toggle");
+  const maxBodySizeEl = document.getElementById("max-body-size");
+  
 
   let logsEnabled = true;
   let networkEnabled = true;
@@ -22,10 +36,72 @@
   let isConnected = false;
   let allDomainsMode = true; // true = all domains, false = specific domains
   let specificDomains = []; // array of domain strings
+  
+  // Network configuration state
+  let networkConfig = {
+    enabled: true,
+    captureMode: 'all',
+    urlPatterns: [],
+    includeHeaders: true,
+    includeRequestBody: true,
+    includeResponseBody: true,
+    includeQueryParams: true,
+    maxResponseBodySize: 50000,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
+    statusCodes: []
+  };
 
   // Show loading initially
   loadingEl.style.display = "flex";
   contentEl.style.display = "none";
+
+  // Load network configuration from server
+  const loadNetworkConfig = async () => {
+    if (!isConnected) return;
+    
+    try {
+      const response = await fetch("http://localhost:27497/network-config", {
+        method: "GET",
+        signal: AbortSignal.timeout(3000),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        networkConfig = { ...networkConfig, ...data.config };
+      }
+    } catch (error) {
+      console.error("Error loading network config:", error);
+    }
+  };
+
+  // Save network configuration to server
+  const saveNetworkConfig = async () => {
+    if (!isConnected) return;
+    
+    try {
+      const response = await fetch("http://localhost:27497/network-config", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(networkConfig),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
+      
+      // Update local config with server response
+      const data = await response.json();
+      if (data.config) {
+        networkConfig = { ...data.config };
+        // Update all displays when config changes
+        updateNetworkConfigDisplay();
+      }
+    } catch (error) {
+      console.error("Error saving network config:", error);
+    }
+  };
 
   // Load current state
   const loadState = async () => {
@@ -55,6 +131,10 @@
           }
         );
         isConnected = response.ok;
+        
+        if (isConnected) {
+          await loadNetworkConfig();
+        }
       } catch {
         isConnected = false;
       }
@@ -115,6 +195,38 @@
     updateDomainsDisplay();
   };
 
+  // Network configuration management
+  const addUrlPattern = async () => {
+    const pattern = urlPatternInputEl.value.trim();
+    if (!pattern) return;
+
+    if (networkConfig.urlPatterns.includes(pattern)) {
+      urlPatternInputEl.value = "";
+      return;
+    }
+
+    networkConfig.urlPatterns.push(pattern);
+    urlPatternInputEl.value = "";
+    await saveNetworkConfig();
+  };
+
+  const removeUrlPattern = async (pattern) => {
+    networkConfig.urlPatterns = networkConfig.urlPatterns.filter((p) => p !== pattern);
+    await saveNetworkConfig();
+  };
+
+  const toggleCaptureMode = async () => {
+    const isFiltered = networkConfig.captureMode !== 'all';
+    networkConfig.captureMode = isFiltered ? 'all' : 'include';
+    await saveNetworkConfig();
+  };
+
+  const toggleFilterMode = async () => {
+    networkConfig.captureMode = networkConfig.captureMode === 'include' ? 'exclude' : 'include';
+    await saveNetworkConfig();
+  };
+
+
   const toggleDomainMode = async () => {
     allDomainsMode = !allDomainsMode;
     await saveDomainSettings();
@@ -164,6 +276,69 @@
     }
   };
 
+  // Update network configuration display
+  const updateNetworkConfigDisplay = () => {
+    // Show/hide network config section based on network enabled state
+    networkConfigSectionEl.style.display = networkEnabled ? "block" : "none";
+    
+    if (!networkEnabled) return;
+
+    // Update capture mode toggle (All vs Filtered)
+    const isFiltered = networkConfig.captureMode !== 'all';
+    captureModeToggleEl.className = "toggle toggle-small";
+    if (isFiltered) {
+      captureModeToggleEl.classList.add("enabled");
+    }
+    captureModeToggleEl.setAttribute("aria-checked", isFiltered.toString());
+
+    // Show/hide filter options
+    networkFiltersEl.style.display = isFiltered ? "block" : "none";
+
+    if (isFiltered) {
+      // Update filter mode toggle (Include vs Exclude)
+      const isExclude = networkConfig.captureMode === 'exclude';
+      filterModeToggleEl.className = "toggle toggle-small";
+      if (isExclude) {
+        filterModeToggleEl.classList.add("enabled");
+      }
+      filterModeToggleEl.setAttribute("aria-checked", isExclude.toString());
+
+      // Update URL patterns list
+      urlPatternsListEl.innerHTML = networkConfig.urlPatterns
+        .map(
+          (pattern) => `
+          <div class="domain-tag">
+            ${pattern}
+            <span class="domain-remove" data-pattern="${pattern}">×</span>
+          </div>
+        `
+        )
+        .join("");
+    }
+
+    // Update option toggles
+    headersToggleEl.className = "toggle";
+    if (networkConfig.includeHeaders) {
+      headersToggleEl.classList.add("enabled");
+    }
+    headersToggleEl.setAttribute("aria-checked", networkConfig.includeHeaders.toString());
+
+    requestBodyToggleEl.className = "toggle";
+    if (networkConfig.includeRequestBody) {
+      requestBodyToggleEl.classList.add("enabled");
+    }
+    requestBodyToggleEl.setAttribute("aria-checked", networkConfig.includeRequestBody.toString());
+
+    responseBodyToggleEl.className = "toggle";
+    if (networkConfig.includeResponseBody) {
+      responseBodyToggleEl.classList.add("enabled");
+    }
+    responseBodyToggleEl.setAttribute("aria-checked", networkConfig.includeResponseBody.toString());
+
+    // Update max body size (convert from bytes to thousands)
+    maxBodySizeEl.value = Math.round(networkConfig.maxResponseBodySize / 1000);
+  };
+
   // Update UI based on current state
   const updateUI = () => {
     // Hide loading, show content
@@ -172,6 +347,9 @@
 
     // Update domains display
     updateDomainsDisplay();
+    
+    // Update network configuration display
+    updateNetworkConfigDisplay();
 
     // Update status
     statusEl.className = "status";
@@ -223,6 +401,20 @@
     networkToggleEl.style.cursor = toggleCursor;
     mcpToggleEl.style.opacity = toggleOpacity;
     mcpToggleEl.style.cursor = toggleCursor;
+    
+    // Disable network config toggles if not connected
+    if (headersToggleEl) {
+      headersToggleEl.style.opacity = toggleOpacity;
+      headersToggleEl.style.cursor = toggleCursor;
+    }
+    if (requestBodyToggleEl) {
+      requestBodyToggleEl.style.opacity = toggleOpacity;
+      requestBodyToggleEl.style.cursor = toggleCursor;
+    }
+    if (responseBodyToggleEl) {
+      responseBodyToggleEl.style.opacity = toggleOpacity;
+      responseBodyToggleEl.style.cursor = toggleCursor;
+    }
 
     // Disable clear buttons if not connected
     clearLogsBtn.disabled = !isConnected;
@@ -430,6 +622,84 @@
     if (e.target.classList.contains("domain-remove")) {
       const domain = e.target.getAttribute("data-domain");
       removeDomain(domain);
+    }
+  });
+
+  // Network configuration event listeners
+  captureModeToggleEl.addEventListener("click", toggleCaptureMode);
+  captureModeToggleEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleCaptureMode();
+    }
+  });
+
+  filterModeToggleEl.addEventListener("click", toggleFilterMode);
+  filterModeToggleEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleFilterMode();
+    }
+  });
+
+  addPatternBtnEl.addEventListener("click", addUrlPattern);
+
+  urlPatternInputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      addUrlPattern();
+    }
+  });
+
+  // Event delegation for URL pattern removal
+  urlPatternsListEl.addEventListener("click", (e) => {
+    if (e.target.classList.contains("domain-remove")) {
+      const pattern = e.target.getAttribute("data-pattern");
+      removeUrlPattern(pattern);
+    }
+  });
+
+
+  // Network option toggles
+  const toggleNetworkOption = (option) => async () => {
+    if (!isConnected) return;
+    networkConfig[option] = !networkConfig[option];
+    await saveNetworkConfig();
+  };
+
+  headersToggleEl.addEventListener("click", toggleNetworkOption('includeHeaders'));
+  headersToggleEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleNetworkOption('includeHeaders')();
+    }
+  });
+
+  requestBodyToggleEl.addEventListener("click", toggleNetworkOption('includeRequestBody'));
+  requestBodyToggleEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleNetworkOption('includeRequestBody')();
+    }
+  });
+
+  responseBodyToggleEl.addEventListener("click", toggleNetworkOption('includeResponseBody'));
+  responseBodyToggleEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleNetworkOption('includeResponseBody')();
+    }
+  });
+
+  // Max body size input
+  maxBodySizeEl.addEventListener("change", async () => {
+    if (!isConnected) return;
+    const newSizeThousands = parseInt(maxBodySizeEl.value);
+    if (newSizeThousands >= 1 && newSizeThousands <= 1000) {
+      networkConfig.maxResponseBodySize = newSizeThousands * 1000;
+      await saveNetworkConfig();
+    } else {
+      // Reset to current value if invalid
+      maxBodySizeEl.value = Math.round(networkConfig.maxResponseBodySize / 1000);
     }
   });
 

@@ -36,3 +36,16 @@ export interface NetworkRequestBatch {
   requests: NetworkRequest[];
   sessionId?: string;
 }
+
+export interface NetworkCaptureConfig {
+  enabled: boolean;
+  captureMode: 'all' | 'include' | 'exclude';
+  urlPatterns: string[];
+  includeHeaders: boolean;
+  includeRequestBody: boolean;
+  includeResponseBody: boolean;
+  includeQueryParams: boolean;
+  maxResponseBodySize: number;
+  methods: string[];
+  statusCodes: number[];
+}
