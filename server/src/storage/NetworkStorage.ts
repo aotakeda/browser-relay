@@ -1,12 +1,6 @@
 import { NetworkRequest } from '@/types';
 import { runAsync, allAsync, getAsync, CountResult } from '@/storage/database';
-
-// Create a simple logger to avoid circular imports
-const logger = {
-  warn: (message: string, ...args: unknown[]) => console.warn(message, ...args),
-  error: (message: string, ...args: unknown[]) => console.error(message, ...args),
-  info: (message: string, ...args: unknown[]) => console.log(message, ...args)
-};
+import { info, warn, error } from '@/utils/logger';
 
 const MAX_NETWORK_REQUESTS = 10000;
 const MAX_REQUEST_BODY_SIZE = 1024 * 1024; // 1MB
@@ -20,12 +14,39 @@ type NetworkRequestFilter = {
   endTime?: string;
 };
 
-class NetworkStorage {
-  private listeners: Set<(request: NetworkRequest) => void> = new Set();
+// Event listeners for new requests
+const listeners = new Set<(request: NetworkRequest) => void>();
 
-  async insertRequests(requests: NetworkRequest[]): Promise<NetworkRequest[]> {
-    const insertedRequests: NetworkRequest[] = [];
-    
+const parseJsonSafely = <T = unknown>(jsonString: string | null | undefined): T | undefined => {
+  if (!jsonString) return undefined;
+  try {
+    return JSON.parse(jsonString) as T;
+  } catch (parseError) {
+    warn('Failed to parse JSON in network request:', parseError);
+    return undefined;
+  }
+};
+
+const cleanupOldRequests = async (): Promise<void> => {
+  const count = await getRequestCount();
+  
+  if (count > MAX_NETWORK_REQUESTS) {
+    const excessCount = count - MAX_NETWORK_REQUESTS;
+    await runAsync(
+      'DELETE FROM network_requests WHERE id IN (SELECT id FROM network_requests ORDER BY timestamp ASC LIMIT ?)',
+      [excessCount]
+    );
+    info(`Cleaned up ${excessCount} old network requests`);
+  }
+};
+
+export const insertRequests = async (requests: NetworkRequest[]): Promise<NetworkRequest[]> => {
+  const insertedRequests: NetworkRequest[] = [];
+  
+  // Begin transaction
+  await runAsync('BEGIN');
+  
+  try {
     for (const request of requests) {
       try {
         // Truncate bodies if they're too large
@@ -70,157 +91,153 @@ class NetworkStorage {
         insertedRequests.push(insertedRequest);
 
         // Notify listeners
-        this.listeners.forEach(listener => {
+        listeners.forEach(listener => {
           try {
             listener(insertedRequest);
-          } catch (error) {
-            logger.error('Error in network request listener:', error);
+          } catch (listenerError) {
+            error('Error in network request listener:', listenerError);
           }
         });
-      } catch (error) {
-        logger.error('Error inserting network request:', error);
+      } catch (insertError) {
+        error('Error inserting network request:', insertError);
       }
     }
 
+    // Commit transaction
+    await runAsync('COMMIT');
+    
     // Clean up old requests to maintain circular buffer
-    await this.cleanupOldRequests();
+    await cleanupOldRequests();
 
     return insertedRequests;
-  }
-
-  async getRequests(
-    limit = 100,
-    offset = 0,
-    filters: NetworkRequestFilter = {}
-  ): Promise<NetworkRequest[]> {
-    let query = 'SELECT * FROM network_requests WHERE 1=1';
-    const params: unknown[] = [];
-
-    if (filters.method) {
-      query += ' AND method = ?';
-      params.push(filters.method);
+  } catch (transactionError) {
+    // Rollback transaction on error
+    try {
+      await runAsync('ROLLBACK');
+    } catch (rollbackError) {
+      error('Failed to rollback transaction:', rollbackError);
     }
+    error('Failed to insert network requests:', transactionError);
+    throw transactionError;
+  }
+};
 
-    if (filters.url) {
-      query += ' AND url LIKE ?';
-      params.push(`%${filters.url}%`);
-    }
+export const getRequests = async (
+  limit = 100,
+  offset = 0,
+  filters: NetworkRequestFilter = {}
+): Promise<NetworkRequest[]> => {
+  let query = 'SELECT * FROM network_requests WHERE 1=1';
+  const params: unknown[] = [];
 
-    if (filters.statusCode) {
-      query += ' AND statusCode = ?';
-      params.push(filters.statusCode);
-    }
-
-    if (filters.startTime) {
-      query += ' AND timestamp >= ?';
-      params.push(filters.startTime);
-    }
-
-    if (filters.endTime) {
-      query += ' AND timestamp <= ?';
-      params.push(filters.endTime);
-    }
-
-    query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
-
-    const rows = await allAsync<NetworkRequest>(query, params);
-    
-    return rows.map(row => ({
-      ...row,
-      requestHeaders: row.requestHeaders ? JSON.parse(row.requestHeaders as unknown as string) : undefined,
-      responseHeaders: row.responseHeaders ? JSON.parse(row.responseHeaders as unknown as string) : undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata as unknown as string) : undefined
-    }));
+  if (filters.method) {
+    query += ' AND method = ?';
+    params.push(filters.method);
   }
 
-  async getRequestById(id: number): Promise<NetworkRequest | null> {
-    const row = await getAsync<NetworkRequest>(
-      'SELECT * FROM network_requests WHERE id = ?',
-      [id]
-    );
-
-    if (!row) return null;
-
-    return {
-      ...row,
-      requestHeaders: row.requestHeaders ? JSON.parse(row.requestHeaders as unknown as string) : undefined,
-      responseHeaders: row.responseHeaders ? JSON.parse(row.responseHeaders as unknown as string) : undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata as unknown as string) : undefined
-    };
+  if (filters.url) {
+    query += ' AND url LIKE ?';
+    params.push(`%${filters.url}%`);
   }
 
-  async getRequestByRequestId(requestId: string): Promise<NetworkRequest | null> {
-    const row = await getAsync<NetworkRequest>(
-      'SELECT * FROM network_requests WHERE requestId = ?',
-      [requestId]
-    );
-
-    if (!row) return null;
-
-    return {
-      ...row,
-      requestHeaders: row.requestHeaders ? JSON.parse(row.requestHeaders as unknown as string) : undefined,
-      responseHeaders: row.responseHeaders ? JSON.parse(row.responseHeaders as unknown as string) : undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata as unknown as string) : undefined
-    };
+  if (filters.statusCode) {
+    query += ' AND statusCode = ?';
+    params.push(filters.statusCode);
   }
 
-  async clearRequests(): Promise<number> {
-    const result = await runAsync('DELETE FROM network_requests');
-    return result.changes;
+  if (filters.startTime) {
+    query += ' AND timestamp >= ?';
+    params.push(filters.startTime);
   }
 
-  async getRequestCount(): Promise<number> {
-    const result = await getAsync<CountResult>('SELECT COUNT(*) as count FROM network_requests');
-    return result?.count || 0;
+  if (filters.endTime) {
+    query += ' AND timestamp <= ?';
+    params.push(filters.endTime);
   }
 
-  private async cleanupOldRequests(): Promise<void> {
-    const count = await this.getRequestCount();
-    
-    if (count > MAX_NETWORK_REQUESTS) {
-      const excessCount = count - MAX_NETWORK_REQUESTS;
-      await runAsync(
-        'DELETE FROM network_requests WHERE id IN (SELECT id FROM network_requests ORDER BY timestamp ASC LIMIT ?)',
-        [excessCount]
-      );
-      logger.info(`Cleaned up ${excessCount} old network requests`);
-    }
-  }
+  query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
 
-  async searchRequests(query: string, limit = 100): Promise<NetworkRequest[]> {
-    if (!query) {
-      query = '';
-    }
-    const searchTerm = `%${query}%`;
-    const rows = await allAsync<NetworkRequest>(
-      `SELECT * FROM network_requests 
-       WHERE url LIKE ? 
-       OR requestHeaders LIKE ? 
-       OR responseHeaders LIKE ?
-       OR requestBody LIKE ?
-       OR responseBody LIKE ?
-       ORDER BY timestamp DESC LIMIT ?`,
-      [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, limit]
-    );
-    
-    return rows.map(row => ({
-      ...row,
-      requestHeaders: row.requestHeaders ? JSON.parse(row.requestHeaders as unknown as string) : undefined,
-      responseHeaders: row.responseHeaders ? JSON.parse(row.responseHeaders as unknown as string) : undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata as unknown as string) : undefined
-    }));
-  }
+  const rows = await allAsync<NetworkRequest>(query, params);
+  
+  return rows.map(row => ({
+    ...row,
+    requestHeaders: parseJsonSafely<Record<string, string>>(row.requestHeaders as unknown as string),
+    responseHeaders: parseJsonSafely<Record<string, string>>(row.responseHeaders as unknown as string),
+    metadata: parseJsonSafely<Record<string, unknown>>(row.metadata as unknown as string)
+  }));
+};
 
-  onNewRequest(listener: (request: NetworkRequest) => void): void {
-    this.listeners.add(listener);
-  }
+export const getRequestById = async (id: number): Promise<NetworkRequest | null> => {
+  const row = await getAsync<NetworkRequest>(
+    'SELECT * FROM network_requests WHERE id = ?',
+    [id]
+  );
 
-  offNewRequest(listener: (request: NetworkRequest) => void): void {
-    this.listeners.delete(listener);
-  }
-}
+  if (!row) return null;
 
-export const networkStorage = new NetworkStorage();
-export { NetworkStorage };
+  return {
+    ...row,
+    requestHeaders: parseJsonSafely<Record<string, string>>(row.requestHeaders as unknown as string),
+    responseHeaders: parseJsonSafely<Record<string, string>>(row.responseHeaders as unknown as string),
+    metadata: parseJsonSafely<Record<string, unknown>>(row.metadata as unknown as string)
+  };
+};
+
+export const getRequestByRequestId = async (requestId: string): Promise<NetworkRequest | null> => {
+  const row = await getAsync<NetworkRequest>(
+    'SELECT * FROM network_requests WHERE requestId = ?',
+    [requestId]
+  );
+
+  if (!row) return null;
+
+  return {
+    ...row,
+    requestHeaders: parseJsonSafely<Record<string, string>>(row.requestHeaders as unknown as string),
+    responseHeaders: parseJsonSafely<Record<string, string>>(row.responseHeaders as unknown as string),
+    metadata: parseJsonSafely<Record<string, unknown>>(row.metadata as unknown as string)
+  };
+};
+
+export const clearRequests = async (): Promise<number> => {
+  const result = await runAsync('DELETE FROM network_requests');
+  return result.changes;
+};
+
+export const getRequestCount = async (): Promise<number> => {
+  const result = await getAsync<CountResult>('SELECT COUNT(*) as count FROM network_requests');
+  return result?.count || 0;
+};
+
+export const searchRequests = async (query: string, limit = 100): Promise<NetworkRequest[]> => {
+  if (!query) {
+    query = '';
+  }
+  const searchTerm = `%${query}%`;
+  const rows = await allAsync<NetworkRequest>(
+    `SELECT * FROM network_requests 
+     WHERE url LIKE ? 
+     OR requestHeaders LIKE ? 
+     OR responseHeaders LIKE ?
+     OR requestBody LIKE ?
+     OR responseBody LIKE ?
+     ORDER BY timestamp DESC LIMIT ?`,
+    [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, limit]
+  );
+  
+  return rows.map(row => ({
+    ...row,
+    requestHeaders: parseJsonSafely<Record<string, string>>(row.requestHeaders as unknown as string),
+    responseHeaders: parseJsonSafely<Record<string, string>>(row.responseHeaders as unknown as string),
+    metadata: parseJsonSafely<Record<string, unknown>>(row.metadata as unknown as string)
+  }));
+};
+
+export const onNewRequest = (listener: (request: NetworkRequest) => void): void => {
+  listeners.add(listener);
+};
+
+export const offNewRequest = (listener: (request: NetworkRequest) => void): void => {
+  listeners.delete(listener);
+};

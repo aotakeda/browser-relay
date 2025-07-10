@@ -1,46 +1,22 @@
-import { NetworkStorage } from '@/storage/NetworkStorage';
+import * as networkStorage from '@/storage/NetworkStorage';
 import { NetworkRequest } from '@/types';
-import { initializeDatabase } from '@/storage/database';
-
-// Mock logger to avoid importing index.ts
-jest.mock('@/index', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn()
-  }
-}));
+import { setupTestDatabase, cleanupTestData } from '../utils/database';
+import { 
+  createMockNetworkRequest
+} from '../utils/factories';
 
 describe('NetworkStorage', () => {
-  let networkStorage: NetworkStorage;
-
   beforeAll(async () => {
-    await initializeDatabase();
-  });
-
-  beforeEach(() => {
-    networkStorage = new NetworkStorage();
+    await setupTestDatabase();
   });
 
   afterEach(async () => {
-    await networkStorage.clearRequests();
-  });
-
-  const createMockRequest = (overrides: Partial<NetworkRequest> = {}): NetworkRequest => ({
-    requestId: 'test-request-1',
-    timestamp: new Date().toISOString(),
-    method: 'GET',
-    url: 'https://example.com/api/test',
-    pageUrl: 'https://example.com',
-    userAgent: 'test-user-agent',
-    statusCode: 200,
-    duration: 150,
-    ...overrides
+    await cleanupTestData();
   });
 
   describe('insertRequests', () => {
     it('should insert single network request successfully', async () => {
-      const mockRequest = createMockRequest();
+      const mockRequest = createMockNetworkRequest();
       const result = await networkStorage.insertRequests([mockRequest]);
       
       expect(result).toHaveLength(1);
@@ -51,7 +27,7 @@ describe('NetworkStorage', () => {
     describe('Request Body Capture', () => {
       it('should store request body when provided', async () => {
         const requestBody = JSON.stringify({ user: 'test', password: 'secret' });
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           requestBody,
           method: 'POST'
         });
@@ -66,7 +42,7 @@ describe('NetworkStorage', () => {
       });
 
       it('should handle null request body', async () => {
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           requestBody: null,
           method: 'GET'
         });
@@ -80,7 +56,7 @@ describe('NetworkStorage', () => {
       });
 
       it('should handle undefined request body', async () => {
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           requestBody: undefined,
           method: 'GET'
         });
@@ -95,7 +71,7 @@ describe('NetworkStorage', () => {
 
       it('should truncate large request bodies', async () => {
         const largeRequestBody = 'x'.repeat(1024 * 1024 + 100); // 1MB + 100 bytes
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           requestBody: largeRequestBody,
           method: 'POST'
         });
@@ -111,7 +87,7 @@ describe('NetworkStorage', () => {
 
       it('should handle form data request bodies', async () => {
         const formData = 'username=test&password=secret&csrf_token=abc123';
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           requestBody: formData,
           method: 'POST',
           requestHeaders: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -127,7 +103,7 @@ describe('NetworkStorage', () => {
 
       it('should handle binary request bodies', async () => {
         const binaryData = Buffer.from([0x89, 0x50, 0x4E, 0x47]).toString('base64');
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           requestBody: binaryData,
           method: 'POST',
           requestHeaders: { 'Content-Type': 'application/octet-stream' }
@@ -145,7 +121,7 @@ describe('NetworkStorage', () => {
     describe('Response Body Capture', () => {
       it('should store response body when provided', async () => {
         const responseBody = JSON.stringify({ success: true, data: [] });
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           responseBody,
           statusCode: 200
         });
@@ -159,7 +135,7 @@ describe('NetworkStorage', () => {
       });
 
       it('should handle null response body', async () => {
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           responseBody: null,
           statusCode: 204
         });
@@ -173,7 +149,7 @@ describe('NetworkStorage', () => {
       });
 
       it('should handle undefined response body', async () => {
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           responseBody: undefined,
           statusCode: 200
         });
@@ -188,7 +164,7 @@ describe('NetworkStorage', () => {
 
       it('should truncate large response bodies', async () => {
         const largeResponseBody = 'y'.repeat(1024 * 1024 + 100); // 1MB + 100 bytes
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           responseBody: largeResponseBody,
           statusCode: 200
         });
@@ -204,7 +180,7 @@ describe('NetworkStorage', () => {
 
       it('should handle HTML response bodies', async () => {
         const htmlResponse = '<html><body><h1>Hello World</h1></body></html>';
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           responseBody: htmlResponse,
           statusCode: 200,
           responseHeaders: { 'Content-Type': 'text/html' }
@@ -220,7 +196,7 @@ describe('NetworkStorage', () => {
 
       it('should handle XML response bodies', async () => {
         const xmlResponse = '<?xml version="1.0"?><root><item>data</item></root>';
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           responseBody: xmlResponse,
           statusCode: 200,
           responseHeaders: { 'Content-Type': 'application/xml' }
@@ -235,7 +211,7 @@ describe('NetworkStorage', () => {
       });
 
       it('should handle empty response bodies', async () => {
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           responseBody: '',
           statusCode: 204
         });
@@ -250,7 +226,7 @@ describe('NetworkStorage', () => {
 
       it('should handle response body with special characters', async () => {
         const specialCharResponse = '{"message": "Hello 世界! 🌍", "emoji": "🚀"}';
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           responseBody: specialCharResponse,
           statusCode: 200,
           responseHeaders: { 'Content-Type': 'application/json; charset=utf-8' }
@@ -269,7 +245,7 @@ describe('NetworkStorage', () => {
       it('should respect maximum request body size limit', async () => {
         // Test exactly at the limit
         const exactLimitBody = 'x'.repeat(1024 * 1024); // Exactly 1MB
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           requestBody: exactLimitBody,
           method: 'POST'
         });
@@ -283,7 +259,7 @@ describe('NetworkStorage', () => {
       it('should respect maximum response body size limit', async () => {
         // Test exactly at the limit
         const exactLimitBody = 'y'.repeat(1024 * 1024); // Exactly 1MB
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           responseBody: exactLimitBody,
           statusCode: 200
         });
@@ -298,7 +274,7 @@ describe('NetworkStorage', () => {
         const largeRequestBody = 'a'.repeat(1024 * 1024 + 50);
         const largeResponseBody = 'b'.repeat(1024 * 1024 + 100);
         
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           requestBody: largeRequestBody,
           responseBody: largeResponseBody,
           method: 'POST',
@@ -316,7 +292,7 @@ describe('NetworkStorage', () => {
       });
 
       it('should handle edge case of empty strings vs null', async () => {
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           requestBody: '',
           responseBody: '',
           method: 'POST',
@@ -342,7 +318,7 @@ describe('NetworkStorage', () => {
           'X-Custom-Header': 'custom-value'
         };
         
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           requestHeaders,
           method: 'POST'
         });
@@ -362,7 +338,7 @@ describe('NetworkStorage', () => {
           'X-Rate-Limit': '100'
         };
         
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           responseHeaders,
           statusCode: 200
         });
@@ -383,7 +359,7 @@ describe('NetworkStorage', () => {
           responseSize: 1200
         };
         
-        const mockRequest = createMockRequest({ metadata });
+        const mockRequest = createMockNetworkRequest({ metadata });
         
         const result = await networkStorage.insertRequests([mockRequest]);
         
@@ -394,7 +370,7 @@ describe('NetworkStorage', () => {
       });
 
       it('should handle null/undefined headers gracefully', async () => {
-        const mockRequest = createMockRequest({ 
+        const mockRequest = createMockNetworkRequest({ 
           requestHeaders: undefined,
           responseHeaders: undefined,
           method: 'GET'
@@ -413,8 +389,8 @@ describe('NetworkStorage', () => {
 
     it('should insert multiple network requests', async () => {
       const mockRequests = [
-        createMockRequest({ requestId: 'req-1', url: 'https://example.com/api/1' }),
-        createMockRequest({ requestId: 'req-2', url: 'https://example.com/api/2' })
+        createMockNetworkRequest({ requestId: 'req-1', url: 'https://example.com/api/1' }),
+        createMockNetworkRequest({ requestId: 'req-2', url: 'https://example.com/api/2' })
       ];
       
       const result = await networkStorage.insertRequests(mockRequests);
@@ -425,7 +401,7 @@ describe('NetworkStorage', () => {
     });
 
     it('should handle requests with headers', async () => {
-      const mockRequest = createMockRequest({
+      const mockRequest = createMockNetworkRequest({
         requestHeaders: { 'Content-Type': 'application/json' },
         responseHeaders: { 'Server': 'nginx' }
       });
@@ -438,7 +414,7 @@ describe('NetworkStorage', () => {
 
     it('should truncate large request bodies', async () => {
       const largeBody = 'x'.repeat(2 * 1024 * 1024); // 2MB
-      const mockRequest = createMockRequest({
+      const mockRequest = createMockNetworkRequest({
         requestBody: largeBody
       });
       
@@ -454,9 +430,9 @@ describe('NetworkStorage', () => {
   describe('getRequests', () => {
     beforeEach(async () => {
       const mockRequests = [
-        createMockRequest({ requestId: 'req-1', method: 'GET', url: 'https://example.com/api/1' }),
-        createMockRequest({ requestId: 'req-2', method: 'POST', url: 'https://example.com/api/2' }),
-        createMockRequest({ requestId: 'req-3', method: 'GET', url: 'https://different.com/api/3' })
+        createMockNetworkRequest({ requestId: 'req-1', method: 'GET', url: 'https://example.com/api/1' }),
+        createMockNetworkRequest({ requestId: 'req-2', method: 'POST', url: 'https://example.com/api/2' }),
+        createMockNetworkRequest({ requestId: 'req-3', method: 'GET', url: 'https://different.com/api/3' })
       ];
       await networkStorage.insertRequests(mockRequests);
     });
@@ -489,7 +465,7 @@ describe('NetworkStorage', () => {
 
     it('should filter by status code', async () => {
       await networkStorage.insertRequests([
-        createMockRequest({ requestId: 'req-error', statusCode: 404 })
+        createMockNetworkRequest({ requestId: 'req-error', statusCode: 404 })
       ]);
       
       const result = await networkStorage.getRequests(100, 0, { statusCode: 404 });
@@ -501,7 +477,7 @@ describe('NetworkStorage', () => {
 
   describe('getRequestById', () => {
     it('should retrieve request by ID', async () => {
-      const mockRequest = createMockRequest();
+      const mockRequest = createMockNetworkRequest();
       const inserted = await networkStorage.insertRequests([mockRequest]);
       
       const result = await networkStorage.getRequestById(inserted[0].id!);
@@ -518,7 +494,7 @@ describe('NetworkStorage', () => {
 
   describe('getRequestByRequestId', () => {
     it('should retrieve request by requestId', async () => {
-      const mockRequest = createMockRequest({ requestId: 'unique-request-id' });
+      const mockRequest = createMockNetworkRequest({ requestId: 'unique-request-id' });
       await networkStorage.insertRequests([mockRequest]);
       
       const result = await networkStorage.getRequestByRequestId('unique-request-id');
@@ -536,8 +512,8 @@ describe('NetworkStorage', () => {
   describe('clearRequests', () => {
     it('should clear all requests', async () => {
       const mockRequests = [
-        createMockRequest({ requestId: 'req-1' }),
-        createMockRequest({ requestId: 'req-2' })
+        createMockNetworkRequest({ requestId: 'req-1' }),
+        createMockNetworkRequest({ requestId: 'req-2' })
       ];
       await networkStorage.insertRequests(mockRequests);
       
@@ -552,7 +528,7 @@ describe('NetworkStorage', () => {
   describe('searchRequests', () => {
     beforeEach(async () => {
       const mockRequests = [
-        createMockRequest({ 
+        createMockNetworkRequest({ 
           requestId: 'search-1', 
           url: 'https://api.example.com/users',
           method: 'GET',
@@ -561,7 +537,7 @@ describe('NetworkStorage', () => {
           requestBody: null,
           responseBody: JSON.stringify({ users: [{ id: 1, name: 'John' }] })
         }),
-        createMockRequest({ 
+        createMockNetworkRequest({ 
           requestId: 'search-2', 
           url: 'https://example.com/api/auth/login',
           method: 'POST',
@@ -570,7 +546,7 @@ describe('NetworkStorage', () => {
           requestBody: JSON.stringify({ username: 'admin', password: 'secret' }),
           responseBody: JSON.stringify({ token: 'jwt-token-here' })
         }),
-        createMockRequest({ 
+        createMockNetworkRequest({ 
           requestId: 'search-3', 
           url: 'https://analytics.example.com/track',
           method: 'POST',
@@ -579,7 +555,7 @@ describe('NetworkStorage', () => {
           requestBody: JSON.stringify({ event: 'page_view', error: 'not found' }),
           responseBody: 'OK'
         }),
-        createMockRequest({ 
+        createMockNetworkRequest({ 
           requestId: 'search-4', 
           url: 'https://example.com/static/image.png',
           method: 'GET',
@@ -744,7 +720,7 @@ describe('NetworkStorage', () => {
       const listener = jest.fn();
       networkStorage.onNewRequest(listener);
       
-      const mockRequest = createMockRequest();
+      const mockRequest = createMockNetworkRequest();
       await networkStorage.insertRequests([mockRequest]);
       
       expect(listener).toHaveBeenCalledWith(expect.objectContaining(mockRequest));
@@ -755,7 +731,7 @@ describe('NetworkStorage', () => {
       networkStorage.onNewRequest(listener);
       networkStorage.offNewRequest(listener);
       
-      const mockRequest = createMockRequest();
+      const mockRequest = createMockNetworkRequest();
       await networkStorage.insertRequests([mockRequest]);
       
       expect(listener).not.toHaveBeenCalled();

@@ -13,9 +13,10 @@
   let batchTimer = null;
   let sendingEnabled = false;
   let logsEnabled = true;
+  let networkEnabled = true;
   let shouldCaptureDomain = true;
-  let allDomainsMode = true;
-  let specificDomains = [];
+  let allDomainsMode = true; // eslint-disable-line unused-imports/no-unused-vars
+  let specificDomains = []; // eslint-disable-line unused-imports/no-unused-vars
   let networkConfig = null;
 
   const captureStackTrace = () => {
@@ -26,60 +27,24 @@
   // Helper function to safely serialize headers for postMessage
   const serializeHeaders = (headers) => {
     if (!headers) return {};
-    
+
     try {
       // If it's already a plain object, return it
       if (headers.constructor === Object) {
         return headers;
       }
-      
+
       // If it's a Headers object, convert it
-      if (headers && typeof headers.entries === 'function') {
+      if (headers && typeof headers.entries === "function") {
         return Object.fromEntries(headers.entries());
       }
-      
+
       // For any other case, try to convert to plain object
       return { ...headers };
     } catch (error) {
       // If all else fails, return empty object
-      console.warn('[Browser Relay] Failed to serialize headers:', error);
+      console.warn("[Browser Relay] Failed to serialize headers:", error);
       return {};
-    }
-  };
-
-  // Check if a specific URL should be captured based on domain configuration
-  const shouldCaptureUrlDomain = (url) => {
-    if (allDomainsMode) {
-      return true;
-    }
-
-    try {
-      const urlObj = new URL(url);
-      const hostname = urlObj.hostname;
-      const port = urlObj.port;
-      const hostWithPort = port ? `${hostname}:${port}` : hostname;
-      
-      return specificDomains.some((domain) => {
-        // First check exact match with host:port
-        if (hostWithPort === domain) {
-          return true;
-        }
-        
-        // Then check hostname-only match (for domains without ports)
-        if (hostname === domain) {
-          return true;
-        }
-        
-        // Finally check subdomain match (for domains without ports)
-        if (hostname.endsWith("." + domain)) {
-          return true;
-        }
-        
-        return false;
-      });
-    } catch {
-      // If URL parsing fails, don't capture
-      return false;
     }
   };
 
@@ -118,7 +83,7 @@
     // Send to content script via postMessage
     window.postMessage(
       {
-        type: "CONSOLE_RELAY_LOGS",
+        type: "BROWSER_RELAY_LOGS",
         logs: logsToSend,
       },
       "*"
@@ -247,12 +212,13 @@
   window.addEventListener("message", (event) => {
     if (
       event.source !== window ||
-      event.data.type !== "CONSOLE_RELAY_SETTINGS"
+      event.data.type !== "BROWSER_RELAY_SETTINGS"
     ) {
       return;
     }
 
     logsEnabled = event.data.logsEnabled;
+    networkEnabled = event.data.networkEnabled;
     shouldCaptureDomain = event.data.shouldCapture;
     allDomainsMode = event.data.allDomainsMode;
     specificDomains = event.data.specificDomains || [];
@@ -538,8 +504,7 @@
   let networkBuffer = [];
 
   const sendNetworkRequests = () => {
-    if (networkBuffer.length === 0 || !sendingEnabled)
-      return;
+    if (networkBuffer.length === 0 || !sendingEnabled) return;
 
     const requestsToSend = [...networkBuffer];
     networkBuffer = [];
@@ -547,7 +512,7 @@
     // Send to content script via postMessage
     window.postMessage(
       {
-        type: "CONSOLE_RELAY_NETWORK",
+        type: "BROWSER_RELAY_NETWORK",
         requests: requestsToSend,
       },
       "*"
@@ -569,11 +534,6 @@
 
     // Skip chrome-extension URLs
     if (url.startsWith("chrome-extension://")) {
-      return false;
-    }
-
-    // Check domain filtering (from popup settings)
-    if (!shouldCaptureUrlDomain(url)) {
       return false;
     }
 
@@ -679,6 +639,11 @@
   };
 
   const addNetworkRequest = (requestData) => {
+    // Don't capture if network capture is disabled
+    if (!networkEnabled) {
+      return;
+    }
+
     // Filter out noise and unwanted requests
     if (
       !shouldCaptureNetworkRequest(
@@ -690,8 +655,8 @@
       return;
     }
 
-    // Don't capture if URL domain not allowed
-    if (!shouldCaptureUrlDomain(requestData.url)) {
+    // Don't capture if page domain not allowed (use shouldCaptureDomain for page check)
+    if (!shouldCaptureDomain) {
       return;
     }
 

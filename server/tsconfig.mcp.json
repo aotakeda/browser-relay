@@ -19,7 +19,12 @@
     "types": ["node"],
     "baseUrl": "./src",
     "paths": {
-      "@/*": ["*"]
+      "@/*": ["./*"],
+      "@/types": ["./types"],
+      "@/storage/*": ["./storage/*"],
+      "@/routes/*": ["./routes/*"],
+      "@/mcp/*": ["./mcp/*"],
+      "@/utils/*": ["./utils/*"]
     }
   },
   "include": ["src/mcp-standalone.ts"],

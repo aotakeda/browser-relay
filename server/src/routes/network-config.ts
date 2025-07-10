@@ -1,12 +1,6 @@
 import { Router } from "express";
 import { NetworkCaptureConfig } from "@/types";
-
-// Create a simple logger to avoid circular imports
-const logger = {
-  info: (message: string, ...args: unknown[]) => console.log(message, ...args),
-  error: (message: string, ...args: unknown[]) =>
-    console.error(message, ...args),
-};
+import { info, error } from '@/utils/logger';
 
 export const networkConfigRouter: Router = Router();
 
@@ -30,8 +24,8 @@ let currentConfig: NetworkCaptureConfig = { ...defaultConfig };
 networkConfigRouter.get("/", async (req, res) => {
   try {
     res.json({ config: currentConfig });
-  } catch (error) {
-    logger.error("Error fetching network config:", error);
+  } catch (fetchError) {
+    error("Error fetching network config:", fetchError);
     res.status(500).json({ error: "Failed to fetch network config" });
   }
 });
@@ -86,8 +80,8 @@ networkConfigRouter.post("/", async (req, res) => {
       config: currentConfig,
       message: "Network capture configuration updated successfully",
     });
-  } catch (error) {
-    logger.error("Error updating network config:", error);
+  } catch (updateError) {
+    error("Error updating network config:", updateError);
     res.status(500).json({ error: "Failed to update network config" });
   }
 });
@@ -96,14 +90,14 @@ networkConfigRouter.post("/reset", async (req, res) => {
   try {
     currentConfig = { ...defaultConfig };
 
-    logger.info("Network capture configuration reset to defaults");
+    info("Network capture configuration reset to defaults");
 
     res.json({
       config: currentConfig,
       message: "Network capture configuration reset to defaults",
     });
-  } catch (error) {
-    logger.error("Error resetting network config:", error);
+  } catch (resetError) {
+    error("Error resetting network config:", resetError);
     res.status(500).json({ error: "Failed to reset network config" });
   }
 });

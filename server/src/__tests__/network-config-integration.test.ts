@@ -1,4 +1,4 @@
-import { NetworkStorage } from '../storage/NetworkStorage';
+import * as networkStorage from '../storage/NetworkStorage';
 import { getCurrentNetworkConfig } from '../routes/network-config';
 import request from 'supertest';
 import express from 'express';
@@ -6,7 +6,6 @@ import { networkConfigRouter } from '../routes/network-config';
 import { initializeDatabase } from '../storage/database';
 
 describe('Network Configuration Integration Tests', () => {
-  let networkStorage: NetworkStorage;
   let app: express.Application;
 
   beforeAll(async () => {
@@ -18,7 +17,6 @@ describe('Network Configuration Integration Tests', () => {
   });
 
   beforeEach(async () => {
-    networkStorage = new NetworkStorage();
     // Reset configuration before each test
     await request(app).post('/network-config/reset');
   });

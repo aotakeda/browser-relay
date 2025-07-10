@@ -2,7 +2,7 @@ import request from 'supertest';
 import express from 'express';
 import { initializeDatabase } from '@/storage/database';
 import { logStorage } from '@/storage/LogStorage';
-import { networkStorage } from '@/storage/NetworkStorage';
+import * as networkStorage from '@/storage/NetworkStorage';
 import { LogBatch, NetworkRequestBatch } from '@/types';
 
 // Mock logger to capture JSON output

@@ -1,4 +1,4 @@
-import { networkStorage } from '@/storage/NetworkStorage';
+import * as networkStorage from '@/storage/NetworkStorage';
 import { NetworkRequest } from '@/types';
 import { initializeDatabase } from '@/storage/database';
 

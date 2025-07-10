@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { ConsoleLog } from '@/types';
 import { runAsync, allAsync, getAsync, CountResult } from '@/storage/database';
+import { info, warn, error } from '@/utils/logger';
 
 // Simple mutex to prevent concurrent transactions
 let isInsertLocked = false;
@@ -26,13 +27,6 @@ const releaseInsertLock = (): void => {
   }
 };
 
-// Create a simple logger to avoid circular imports
-const logger = {
-  warn: (message: string, ...args: unknown[]) => console.warn(message, ...args),
-  error: (message: string, ...args: unknown[]) => console.error(message, ...args),
-  info: (message: string, ...args: unknown[]) => console.log(message, ...args)
-};
-
 interface LogRow {
   id: number;
   timestamp: string;
@@ -52,8 +46,8 @@ const tryParseJSON = (jsonString: string): Record<string, unknown> | null => {
   try {
     const parsed = JSON.parse(jsonString);
     return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : null;
-  } catch (error) {
-    logger.warn('Failed to parse JSON metadata:', error);
+  } catch (parseError) {
+    warn('Failed to parse JSON metadata:', parseError);
     return null;
   }
 };
@@ -62,8 +56,8 @@ const tryParseJSON = (jsonString: string): Record<string, unknown> | null => {
 const tryStringifyJSON = (obj: unknown): string | null => {
   try {
     return JSON.stringify(obj);
-  } catch (error) {
-    logger.warn('Failed to stringify metadata:', error);
+  } catch (stringifyError) {
+    warn('Failed to stringify metadata:', stringifyError);
     return null;
   }
 };
@@ -79,7 +73,7 @@ export const insertLogs = async (logs: ConsoleLog[]): Promise<ConsoleLog[]> => {
     for (const log of logs) {
       // Validate required fields
       if (!log.message || !log.pageUrl) {
-        logger.warn('Skipping log with missing required fields:', log);
+        warn('Skipping log with missing required fields:', log);
         continue;
       }
       const result = await runAsync(
@@ -108,14 +102,14 @@ export const insertLogs = async (logs: ConsoleLog[]): Promise<ConsoleLog[]> => {
     await enforceCircularBuffer();
     
     return insertedLogs;
-  } catch (error) {
+  } catch (insertError) {
     try {
       await runAsync('ROLLBACK');
     } catch (rollbackError) {
-      logger.error('Failed to rollback transaction:', rollbackError);
+      error('Failed to rollback transaction:', rollbackError);
     }
-    logger.error('Failed to insert logs:', error);
-    throw error;
+    error('Failed to insert logs:', insertError);
+    throw insertError;
   } finally {
     releaseInsertLock();
   }
@@ -132,7 +126,7 @@ const enforceCircularBuffer = async (): Promise<void> => {
       )`,
       [deleteCount]
     );
-    logger.info(`Deleted ${deleteCount} old logs to maintain buffer size`);
+    info(`Deleted ${deleteCount} old logs to maintain buffer size`);
   }
 };
 

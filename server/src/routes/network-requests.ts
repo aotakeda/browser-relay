@@ -1,19 +1,19 @@
 import { Router } from "express";
-import { networkStorage } from "@/storage/NetworkStorage";
+import * as networkStorage from "@/storage/NetworkStorage";
 import { NetworkRequest, NetworkRequestBatch } from "@/types";
 import { logger } from "@/index";
 import { getCurrentNetworkConfig } from "@/routes/network-config";
 
-function getStatusCategory(statusCode: number | undefined): string {
+const getStatusCategory = (statusCode: number | undefined): string => {
   if (!statusCode) return "pending";
   if (statusCode >= 200 && statusCode < 300) return "success";
   if (statusCode >= 300 && statusCode < 400) return "redirect";
   if (statusCode >= 400 && statusCode < 500) return "client_error";
   if (statusCode >= 500 && statusCode < 600) return "server_error";
   return "unknown";
-}
+};
 
-function processBodyForJSON(body: string | undefined): unknown {
+const processBodyForJSON = (body: string | undefined): unknown => {
   if (!body) return null;
 
   const maxLength = 800;
@@ -63,9 +63,9 @@ function processBodyForJSON(body: string | undefined): unknown {
       };
     }
   }
-}
+};
 
-function shouldCaptureRequest(request: NetworkRequest): boolean {
+const shouldCaptureRequest = (request: NetworkRequest): boolean => {
   const config = getCurrentNetworkConfig();
 
   // If network capture is disabled, don't capture
@@ -110,9 +110,9 @@ function shouldCaptureRequest(request: NetworkRequest): boolean {
   }
 
   return true;
-}
+};
 
-function processRequestWithConfig(request: NetworkRequest): NetworkRequest {
+const processRequestWithConfig = (request: NetworkRequest): NetworkRequest => {
   const config = getCurrentNetworkConfig();
   const processedRequest = { ...request };
 
@@ -141,7 +141,7 @@ function processRequestWithConfig(request: NetworkRequest): NetworkRequest {
   }
 
   return processedRequest;
-}
+};
 
 export const networkRequestsRouter: Router = Router();
 

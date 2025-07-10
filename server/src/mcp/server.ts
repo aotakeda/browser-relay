@@ -5,9 +5,9 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { logStorage } from "../storage/LogStorage.js";
-import { networkStorage } from "../storage/NetworkStorage.js";
+import * as networkStorage from "../storage/NetworkStorage.js";
 import { logger } from "../index.js";
-import { NetworkRequest, ConsoleLog } from "../types.js";
+import { NetworkRequest } from "../types.js";
 
 let mcpServer: Server | null = null;
 
@@ -47,32 +47,39 @@ const createMinimalNetworkRequest = (request: NetworkRequest) => {
 };
 
 // Helper function to estimate response size and truncate if needed
-const ensureResponseSize = (data: any): any => {
+const ensureResponseSize = (data: unknown): unknown => {
   const jsonStr = JSON.stringify(data);
   
   // Rough estimate: 1 char ≈ 1 token for JSON
   if (jsonStr.length > MCP_MAX_RESPONSE_SIZE) {
     logger.warn(`MCP response too large (${jsonStr.length} chars), truncating...`);
     
-    // If it's an array response, reduce the count
-    if (data.requests && Array.isArray(data.requests)) {
-      const maxItems = Math.floor(MCP_MAX_RESPONSE_SIZE / (jsonStr.length / data.requests.length));
-      return {
-        ...data,
-        requests: data.requests.slice(0, Math.max(1, maxItems)),
-        _truncated: true,
-        _originalCount: data.requests.length
-      };
+    // Type guard for object with requests property
+    if (data && typeof data === 'object' && 'requests' in data) {
+      const typedData = data as { requests: unknown[] };
+      if (Array.isArray(typedData.requests)) {
+        const maxItems = Math.floor(MCP_MAX_RESPONSE_SIZE / (jsonStr.length / typedData.requests.length));
+        return {
+          ...typedData,
+          requests: typedData.requests.slice(0, Math.max(1, maxItems)),
+          _truncated: true,
+          _originalCount: typedData.requests.length
+        };
+      }
     }
     
-    if (data.logs && Array.isArray(data.logs)) {
-      const maxItems = Math.floor(MCP_MAX_RESPONSE_SIZE / (jsonStr.length / data.logs.length));
-      return {
-        ...data,
-        logs: data.logs.slice(0, Math.max(1, maxItems)),
-        _truncated: true,
-        _originalCount: data.logs.length
-      };
+    // Type guard for object with logs property
+    if (data && typeof data === 'object' && 'logs' in data) {
+      const typedData = data as { logs: unknown[] };
+      if (Array.isArray(typedData.logs)) {
+        const maxItems = Math.floor(MCP_MAX_RESPONSE_SIZE / (jsonStr.length / typedData.logs.length));
+        return {
+          ...typedData,
+          logs: typedData.logs.slice(0, Math.max(1, maxItems)),
+          _truncated: true,
+          _originalCount: typedData.logs.length
+        };
+      }
     }
   }
   

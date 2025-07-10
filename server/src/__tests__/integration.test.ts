@@ -5,7 +5,7 @@ import { logsRouter } from '@/routes/logs';
 import { networkRequestsRouter } from '@/routes/network-requests';
 import { initializeDatabase } from '@/storage/database';
 import { logStorage } from '@/storage/LogStorage';
-import { networkStorage } from '@/storage/NetworkStorage';
+import * as networkStorage from '@/storage/NetworkStorage';
 import { ConsoleLog, LogBatch, NetworkRequestBatch } from '@/types';
 
 // Mock logger to avoid log pollution in tests

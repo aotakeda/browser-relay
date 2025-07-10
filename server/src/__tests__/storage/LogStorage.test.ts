@@ -1,36 +1,24 @@
 import { ConsoleLog } from '@/types';
 import { logStorage } from '@/storage/LogStorage';
-import { initializeDatabase } from '@/storage/database';
+import { setupTestDatabase, cleanupTestData } from '../utils/database';
+import { 
+  createMockLog, 
+  createMockLogs, 
+  createLogWithMetadata 
+} from '../utils/factories';
 
 describe('LogStorage', () => {
-  beforeEach(async () => {
-    await initializeDatabase();
+  beforeAll(async () => {
+    await setupTestDatabase();
   });
 
   afterEach(async () => {
-    await logStorage.clearLogs();
+    await cleanupTestData();
   });
 
   describe('insertLogs', () => {
     it('should insert valid console logs', async () => {
-      const testLogs: ConsoleLog[] = [
-        {
-          timestamp: '2023-01-01T00:00:00.000Z',
-          level: 'info',
-          message: 'Test log message',
-          pageUrl: 'https://example.com',
-          userAgent: 'Test Agent'
-        },
-        {
-          timestamp: '2023-01-01T00:01:00.000Z',
-          level: 'error',
-          message: 'Test error message',
-          stackTrace: 'Error stack trace',
-          pageUrl: 'https://example.com/error',
-          userAgent: 'Test Agent',
-          metadata: { key: 'value' }
-        }
-      ];
+      const testLogs = createMockLogs(2, { userAgent: 'Test Agent' });
 
       const insertedLogs = await logStorage.insertLogs(testLogs);
 
@@ -43,24 +31,9 @@ describe('LogStorage', () => {
 
     it('should skip logs with missing required fields', async () => {
       const testLogs: ConsoleLog[] = [
-        {
-          timestamp: '2023-01-01T00:00:00.000Z',
-          level: 'info',
-          message: 'Valid log',
-          pageUrl: 'https://example.com'
-        },
-        {
-          timestamp: '2023-01-01T00:01:00.000Z',
-          level: 'error',
-          message: '', // Missing message
-          pageUrl: 'https://example.com'
-        },
-        {
-          timestamp: '2023-01-01T00:02:00.000Z',
-          level: 'warn',
-          message: 'Another valid log',
-          pageUrl: '' // Missing pageUrl
-        }
+        createMockLog({ message: '' }), // Invalid: empty message
+        createMockLog({ message: 'Valid log' }), // Valid log
+        createMockLog({ pageUrl: '' }) // Invalid: empty pageUrl
       ];
 
       const insertedLogs = await logStorage.insertLogs(testLogs);
@@ -80,15 +53,7 @@ describe('LogStorage', () => {
         boolean: true
       };
 
-      const testLogs: ConsoleLog[] = [
-        {
-          timestamp: '2023-01-01T00:00:00.000Z',
-          level: 'info',
-          message: 'Complex metadata log',
-          pageUrl: 'https://example.com',
-          metadata: complexMetadata
-        }
-      ];
+      const testLogs = [createLogWithMetadata(complexMetadata)];
 
       const insertedLogs = await logStorage.insertLogs(testLogs);
 

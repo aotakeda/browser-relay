@@ -7,11 +7,13 @@ module.exports = [
     ignores: [
       'node_modules/**',
       'dist/**',
+      'dist-mcp/**',
       'build/**',
       '*.config.js',
       'eslint.config.js',
       'jest.config.js',
       'data/**',
+      'src/mcp-standalone.ts',
     ],
   },
   {
@@ -21,7 +23,7 @@ module.exports = [
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
-        project: ['./tsconfig.json'],
+        project: ['./tsconfig.json', './tsconfig.mcp.json'],
       },
     },
     plugins: {

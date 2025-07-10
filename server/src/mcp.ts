@@ -8,7 +8,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { logStorage } from "./storage/LogStorage.js";
-import { networkStorage } from "./storage/NetworkStorage.js";
+import * as networkStorage from "./storage/NetworkStorage.js";
 import { initializeDatabase } from "./storage/database.js";
 
 const tools = [

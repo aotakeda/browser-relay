@@ -29,6 +29,17 @@ const dbRun = promisify(db.run.bind(db)) as (sql: string, params?: unknown[]) =>
 const dbGet = promisify(db.get.bind(db)) as (sql: string, params?: unknown[]) => Promise<unknown>;
 const dbAll = promisify(db.all.bind(db)) as (sql: string, params?: unknown[]) => Promise<unknown[]>;
 
+// Safe JSON parsing helper
+const parseJsonSafely = (jsonString: string | null | undefined): unknown => {
+  if (!jsonString) return undefined;
+  try {
+    return JSON.parse(jsonString);
+  } catch (error) {
+    console.error('Failed to parse JSON in MCP server:', error);
+    return undefined;
+  }
+};
+
 // Logger
 const logger = {
   info: (message: string, ...args: unknown[]) => console.log(message, ...args),
@@ -253,7 +264,7 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
       const rows = await dbAll(query, params);
       const logs = rows.map((row: any) => ({
         ...row,
-        metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+        metadata: parseJsonSafely(row.metadata)
       }));
       return ensureResponseSize({ logs });
     }
@@ -271,7 +282,7 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
       );
       const logs = rows.map((row: any) => ({
         ...row,
-        metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+        metadata: parseJsonSafely(row.metadata)
       }));
       return ensureResponseSize({ logs });
     }
@@ -312,9 +323,9 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
       const rows = await dbAll(query, params);
       const requests = rows.map((row: any) => ({
         ...row,
-        requestHeaders: row.requestHeaders ? JSON.parse(row.requestHeaders) : undefined,
-        responseHeaders: row.responseHeaders ? JSON.parse(row.responseHeaders) : undefined,
-        metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+        requestHeaders: parseJsonSafely(row.requestHeaders),
+        responseHeaders: parseJsonSafely(row.responseHeaders),
+        metadata: parseJsonSafely(row.metadata)
       }));
       
       const minimalRequests = requests.map(createMinimalNetworkRequest);
@@ -341,9 +352,9 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
       
       const requests = rows.map((row: any) => ({
         ...row,
-        requestHeaders: row.requestHeaders ? JSON.parse(row.requestHeaders) : undefined,
-        responseHeaders: row.responseHeaders ? JSON.parse(row.responseHeaders) : undefined,
-        metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+        requestHeaders: parseJsonSafely(row.requestHeaders),
+        responseHeaders: parseJsonSafely(row.responseHeaders),
+        metadata: parseJsonSafely(row.metadata)
       }));
       
       const minimalRequests = requests.map(createMinimalNetworkRequest);

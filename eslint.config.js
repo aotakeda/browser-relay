@@ -14,6 +14,7 @@ module.exports = [
       'server/dist/**',
       'server/dist-mcp/**',
       'server/data/**',
+      'server/src/mcp-standalone.ts',
       'extension/icons/**',
     ],
   },

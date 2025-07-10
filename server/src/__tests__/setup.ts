@@ -1,13 +1,15 @@
-// Test setup file
+// Global test setup file - applies to all tests
 process.env.NODE_ENV = 'test';
 
 // Increase timeout for async operations
 jest.setTimeout(10000);
 
-// Mock MCP server to avoid ESM import issues
-jest.mock('@/mcp/server', () => ({
-  setupMCPServer: jest.fn().mockResolvedValue(undefined)
-}));
+// Import and apply global mocks
+import { mockMCPServer, mockIndexLogger } from './utils/mocks';
+
+// Apply global mocks that all tests need
+mockMCPServer();
+mockIndexLogger();
 
 // Global test cleanup
 afterAll(async () => {
