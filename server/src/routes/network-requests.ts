@@ -180,6 +180,16 @@ networkRequestsRouter.post("/", async (req, res) => {
           return false;
         }
 
+        // Filter out common static assets (images, fonts, etc.)
+        const staticAssetPatterns = [
+          /\.(png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|otf|eot)$/i,
+          /\.(css|js|map)$/i
+        ];
+        
+        if (staticAssetPatterns.some(pattern => pattern.test(request.url))) {
+          return false;
+        }
+
         // Apply configuration-based filtering
         return shouldCaptureRequest(request);
       })

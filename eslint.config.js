@@ -12,6 +12,7 @@ module.exports = [
       'eslint.config.js',
       'jest.config.js',
       'server/dist/**',
+      'server/dist-mcp/**',
       'server/data/**',
       'extension/icons/**',
     ],

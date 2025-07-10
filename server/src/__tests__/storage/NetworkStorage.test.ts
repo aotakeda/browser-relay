@@ -549,6 +549,196 @@ describe('NetworkStorage', () => {
     });
   });
 
+  describe('searchRequests', () => {
+    beforeEach(async () => {
+      const mockRequests = [
+        createMockRequest({ 
+          requestId: 'search-1', 
+          url: 'https://api.example.com/users',
+          method: 'GET',
+          requestHeaders: { 'Authorization': 'Bearer token123' },
+          responseHeaders: { 'Content-Type': 'application/json' },
+          requestBody: null,
+          responseBody: JSON.stringify({ users: [{ id: 1, name: 'John' }] })
+        }),
+        createMockRequest({ 
+          requestId: 'search-2', 
+          url: 'https://example.com/api/auth/login',
+          method: 'POST',
+          requestHeaders: { 'Content-Type': 'application/json' },
+          responseHeaders: { 'Set-Cookie': 'session=abc123' },
+          requestBody: JSON.stringify({ username: 'admin', password: 'secret' }),
+          responseBody: JSON.stringify({ token: 'jwt-token-here' })
+        }),
+        createMockRequest({ 
+          requestId: 'search-3', 
+          url: 'https://analytics.example.com/track',
+          method: 'POST',
+          requestHeaders: { 'X-Api-Key': 'analytics-key' },
+          responseHeaders: { 'Status': 'OK' },
+          requestBody: JSON.stringify({ event: 'page_view', error: 'not found' }),
+          responseBody: 'OK'
+        }),
+        createMockRequest({ 
+          requestId: 'search-4', 
+          url: 'https://example.com/static/image.png',
+          method: 'GET',
+          requestHeaders: { 'Accept': 'image/png' },
+          responseHeaders: { 'Content-Type': 'image/png' },
+          requestBody: null,
+          responseBody: null
+        })
+      ];
+      await networkStorage.insertRequests(mockRequests);
+    });
+
+    it('should search by URL substring', async () => {
+      const result = await networkStorage.searchRequests('api.example.com');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].url).toBe('https://api.example.com/users');
+    });
+
+    it('should search by URL path', async () => {
+      const result = await networkStorage.searchRequests('/auth/login');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].url).toBe('https://example.com/api/auth/login');
+    });
+
+    it('should search in request headers', async () => {
+      const result = await networkStorage.searchRequests('Bearer token123');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].requestHeaders).toEqual({ 'Authorization': 'Bearer token123' });
+    });
+
+    it('should search in response headers', async () => {
+      const result = await networkStorage.searchRequests('session=abc123');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].responseHeaders).toEqual({ 'Set-Cookie': 'session=abc123' });
+    });
+
+    it('should search in request body', async () => {
+      const result = await networkStorage.searchRequests('username');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].requestBody).toContain('username');
+    });
+
+    it('should search in response body', async () => {
+      const result = await networkStorage.searchRequests('jwt-token-here');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].responseBody).toContain('jwt-token-here');
+    });
+
+    it('should search across multiple fields', async () => {
+      const result = await networkStorage.searchRequests('example.com');
+      
+      expect(result.length).toBeGreaterThanOrEqual(3); // Should match URLs containing example.com
+      expect(result.every((r: NetworkRequest) => r.url.includes('example.com'))).toBe(true);
+    });
+
+    it('should search for error-related content', async () => {
+      const result = await networkStorage.searchRequests('error');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].requestBody).toContain('error');
+    });
+
+    it('should search for authentication-related content', async () => {
+      const result = await networkStorage.searchRequests('/auth/');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].url).toContain('auth');
+    });
+
+    it('should search for API key content', async () => {
+      const result = await networkStorage.searchRequests('analytics-key');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].requestHeaders).toEqual({ 'X-Api-Key': 'analytics-key' });
+    });
+
+    it('should be case-insensitive', async () => {
+      const result = await networkStorage.searchRequests('USERS');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].url).toContain('users');
+    });
+
+    it('should handle empty search query', async () => {
+      const result = await networkStorage.searchRequests('');
+      
+      expect(result).toHaveLength(4); // Should match all requests
+    });
+
+    it('should handle search query with no matches', async () => {
+      const result = await networkStorage.searchRequests('nonexistent-search-term');
+      
+      expect(result).toHaveLength(0);
+    });
+
+    it('should respect limit parameter', async () => {
+      const result = await networkStorage.searchRequests('example.com', 2);
+      
+      expect(result).toHaveLength(2);
+    });
+
+    it('should search in JSON request bodies', async () => {
+      const result = await networkStorage.searchRequests('admin');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].requestBody).toContain('admin');
+    });
+
+    it('should search in JSON response bodies', async () => {
+      const result = await networkStorage.searchRequests('John');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].responseBody).toContain('John');
+    });
+
+    it('should handle requests with null bodies', async () => {
+      const result = await networkStorage.searchRequests('image.png');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].requestBody).toBeNull();
+      expect(result[0].responseBody).toBeNull();
+    });
+
+    it('should search for content-type headers', async () => {
+      const result = await networkStorage.searchRequests('application/json');
+      
+      expect(result).toHaveLength(2);
+      expect(result.every((r: NetworkRequest) => 
+        JSON.stringify(r.requestHeaders || {}).includes('application/json') ||
+        JSON.stringify(r.responseHeaders || {}).includes('application/json')
+      )).toBe(true);
+    });
+
+    it('should handle special characters in search', async () => {
+      const result = await networkStorage.searchRequests('page_view');
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].requestBody).toContain('page_view');
+    });
+
+    it('should return results in descending timestamp order', async () => {
+      const result = await networkStorage.searchRequests('example.com');
+      
+      expect(result.length).toBeGreaterThanOrEqual(3); // At least 3 results
+      // Results should be ordered by timestamp DESC (most recent first)
+      for (let i = 0; i < result.length - 1; i++) {
+        expect(new Date(result[i].timestamp).getTime()).toBeGreaterThanOrEqual(
+          new Date(result[i + 1].timestamp).getTime()
+        );
+      }
+    });
+  });
+
   describe('listeners', () => {
     it('should notify listeners when new requests are added', async () => {
       const listener = jest.fn();

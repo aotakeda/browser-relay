@@ -189,6 +189,30 @@ class NetworkStorage {
     }
   }
 
+  async searchRequests(query: string, limit = 100): Promise<NetworkRequest[]> {
+    if (!query) {
+      query = '';
+    }
+    const searchTerm = `%${query}%`;
+    const rows = await allAsync<NetworkRequest>(
+      `SELECT * FROM network_requests 
+       WHERE url LIKE ? 
+       OR requestHeaders LIKE ? 
+       OR responseHeaders LIKE ?
+       OR requestBody LIKE ?
+       OR responseBody LIKE ?
+       ORDER BY timestamp DESC LIMIT ?`,
+      [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, limit]
+    );
+    
+    return rows.map(row => ({
+      ...row,
+      requestHeaders: row.requestHeaders ? JSON.parse(row.requestHeaders as unknown as string) : undefined,
+      responseHeaders: row.responseHeaders ? JSON.parse(row.responseHeaders as unknown as string) : undefined,
+      metadata: row.metadata ? JSON.parse(row.metadata as unknown as string) : undefined
+    }));
+  }
+
   onNewRequest(listener: (request: NetworkRequest) => void): void {
     this.listeners.add(listener);
   }

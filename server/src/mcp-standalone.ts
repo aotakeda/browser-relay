@@ -50,19 +50,21 @@ async function initializeDatabase() {
   await dbRun(`
     CREATE TABLE IF NOT EXISTS network_requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      requestId TEXT NOT NULL,
       timestamp TEXT NOT NULL,
       method TEXT NOT NULL,
       url TEXT NOT NULL,
-      hostname TEXT NOT NULL,
-      status_code INTEGER,
-      status_category TEXT,
-      duration_ms INTEGER,
-      request_headers TEXT,
-      request_body TEXT,
-      response_headers TEXT,
-      response_body TEXT,
-      response_size INTEGER,
-      context TEXT
+      requestHeaders TEXT,
+      responseHeaders TEXT,
+      requestBody TEXT,
+      responseBody TEXT,
+      statusCode INTEGER,
+      duration INTEGER,
+      responseSize INTEGER,
+      pageUrl TEXT NOT NULL,
+      userAgent TEXT,
+      metadata TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
@@ -75,42 +77,54 @@ async function initializeDatabase() {
 const tools = [
   {
     name: "get_console_logs",
-    description: "Retrieve console logs with optional filters",
+    description: "Retrieve console logs with optional filters. Examples: get recent errors (level='error'), logs from specific site (url='example.com'), or logs in time range (startTime/endTime).",
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", default: 100 },
-        offset: { type: "number", default: 0 },
-        level: { type: "string", enum: ["log", "warn", "error", "info"] },
-        url: { type: "string" },
-        startTime: { type: "string" },
-        endTime: { type: "string" },
+        limit: { type: "number", default: 100, description: "Maximum number of logs to return" },
+        offset: { type: "number", default: 0, description: "Number of logs to skip (for pagination)" },
+        level: { type: "string", enum: ["log", "warn", "error", "info"], description: "Filter by log level" },
+        url: { type: "string", description: "Filter by page URL (partial match)" },
+        startTime: { type: "string", description: "Filter logs after this timestamp (ISO 8601)" },
+        endTime: { type: "string", description: "Filter logs before this timestamp (ISO 8601)" },
       },
     },
   },
   {
     name: "get_network_requests",
-    description: "Retrieve network requests with optional filters",
+    description: "Retrieve network requests with optional filters. Examples: get failed requests (statusCode=500), API calls (method='POST'), or requests to specific domain (url='api.example.com').",
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", default: 100 },
-        offset: { type: "number", default: 0 },
-        method: { type: "string" },
-        url: { type: "string" },
-        statusCode: { type: "number" },
-        startTime: { type: "string" },
-        endTime: { type: "string" },
+        limit: { type: "number", default: 100, description: "Maximum number of requests to return" },
+        offset: { type: "number", default: 0, description: "Number of requests to skip (for pagination)" },
+        method: { type: "string", description: "Filter by HTTP method (GET, POST, etc.)" },
+        url: { type: "string", description: "Filter by URL (partial match)" },
+        statusCode: { type: "number", description: "Filter by HTTP status code" },
+        startTime: { type: "string", description: "Filter requests after this timestamp (ISO 8601)" },
+        endTime: { type: "string", description: "Filter requests before this timestamp (ISO 8601)" },
       },
     },
   },
   {
     name: "search_logs",
-    description: "Search console logs by text query",
+    description: "Search console logs by text query. Searches message and stack trace content.",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Search query" },
+        query: { type: "string", description: "Search query to match against log message or stack trace" },
+        limit: { type: "number", default: 100 },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "search_network_requests",
+    description: "Search network requests by URL, headers, or body content. Searches across URL, request/response headers, and request/response bodies.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query to match against URL, headers, or body content" },
         limit: { type: "number", default: 100 },
       },
       required: ["query"],
@@ -118,7 +132,7 @@ const tools = [
   },
   {
     name: "clear_console_logs",
-    description: "Clear all stored console logs",
+    description: "Clear all stored console logs. This permanently deletes all log entries from the database. Returns the number of logs deleted.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -126,7 +140,7 @@ const tools = [
   },
   {
     name: "clear_network_requests",
-    description: "Clear all stored network requests",
+    description: "Clear all stored network requests. This permanently deletes all request entries from the database. Returns the number of requests deleted.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -183,7 +197,7 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
         params.push(`%${args.url}%`);
       }
       if (args.statusCode) {
-        conditions.push("status_code = ?");
+        conditions.push("statusCode = ?");
         params.push(args.statusCode);
       }
       if (args.startTime) {
@@ -215,6 +229,21 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
       const searchTerm = `%${args.query}%`;
       const logs = await dbAll(query, [searchTerm, searchTerm, args.limit || 100]);
       return { logs };
+    }
+
+    case "search_network_requests": {
+      const query = `
+        SELECT * FROM network_requests 
+        WHERE url LIKE ? 
+        OR requestHeaders LIKE ? 
+        OR responseHeaders LIKE ?
+        OR requestBody LIKE ?
+        OR responseBody LIKE ?
+        ORDER BY timestamp DESC LIMIT ?
+      `;
+      const searchTerm = `%${args.query}%`;
+      const requests = await dbAll(query, [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, args.limit || 100]);
+      return { requests };
     }
 
     case "clear_console_logs": {

@@ -5,6 +5,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { logStorage } from "@/storage/LogStorage";
+import { networkStorage } from "@/storage/NetworkStorage";
 import { logger } from "@/index";
 
 let mcpServer: Server | null = null;
@@ -45,6 +46,42 @@ const tools = [
       required: ["query"],
     },
   },
+  {
+    name: "get_network_requests",
+    description: "Retrieve network requests with optional filters",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", default: 100 },
+        offset: { type: "number", default: 0 },
+        method: { type: "string" },
+        url: { type: "string" },
+        statusCode: { type: "number" },
+        startTime: { type: "string" },
+        endTime: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "clear_network_requests",
+    description: "Clear all stored network requests",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "search_network_requests",
+    description: "Search network requests by URL, headers, or body content",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query to match against URL, headers, or body content" },
+        limit: { type: "number", default: 100 },
+      },
+      required: ["query"],
+    },
+  },
 ];
 
 const handleToolCall = async (name: string, args: Record<string, unknown>) => {
@@ -71,6 +108,34 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
     case "search_logs": {
       const logs = await logStorage.searchLogs(args.query as string, (args.limit as number) || 100);
       return { logs };
+    }
+
+    case "get_network_requests": {
+      const requests = await networkStorage.getRequests(
+        (args.limit as number) || 100,
+        (args.offset as number) || 0,
+        {
+          method: args.method as string,
+          url: args.url as string,
+          statusCode: args.statusCode as number,
+          startTime: args.startTime as string,
+          endTime: args.endTime as string,
+        }
+      );
+      return { requests };
+    }
+
+    case "clear_network_requests": {
+      const count = await networkStorage.clearRequests();
+      return { cleared: count };
+    }
+
+    case "search_network_requests": {
+      const requests = await networkStorage.searchRequests(
+        args.query as string,
+        (args.limit as number) || 100
+      );
+      return { requests };
     }
 
     default:
