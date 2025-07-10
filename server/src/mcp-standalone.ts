@@ -14,9 +14,6 @@ import { existsSync, mkdirSync } from "fs";
 import { fileURLToPath } from 'url';
 
 // Database setup - use absolute path to the actual Browser Relay database
-// The MCP server should use the same database as the main server
-// Use import.meta.url to get the directory of this file, then navigate to server/data
-// This file is in server/src/, so we go up 1 level to server/ then into data/
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const dataDir = path.join(__dirname, '..', 'data');
@@ -31,6 +28,80 @@ const db = new sqlite3.Database(dbPath);
 const dbRun = promisify(db.run.bind(db)) as (sql: string, params?: unknown[]) => Promise<sqlite3.RunResult>;
 const dbGet = promisify(db.get.bind(db)) as (sql: string, params?: unknown[]) => Promise<unknown>;
 const dbAll = promisify(db.all.bind(db)) as (sql: string, params?: unknown[]) => Promise<unknown[]>;
+
+// Logger
+const logger = {
+  info: (message: string, ...args: unknown[]) => console.log(message, ...args),
+  warn: (message: string, ...args: unknown[]) => console.warn(message, ...args),
+  error: (message: string, ...args: unknown[]) => console.error(message, ...args)
+};
+
+// Configuration for MCP response optimization
+const MCP_BODY_TRUNCATE_LENGTH = 200; // Keep bodies very short for debugging
+const MCP_MAX_RESPONSE_SIZE = 100000; // ~100k tokens max
+
+// Helper function to truncate large strings
+const truncateString = (str: string | null | undefined, maxLength: number): string | null => {
+  if (!str) return str || null;
+  if (str.length <= maxLength) return str;
+  return str.substring(0, maxLength) + `... [truncated ${str.length - maxLength} chars]`;
+};
+
+// Helper function to create minimal network request response with only essential debugging fields
+const createMinimalNetworkRequest = (request: any) => {
+  return {
+    method: request.method,
+    url: request.url,
+    statusCode: request.statusCode,
+    timestamp: request.timestamp,
+    duration: request.duration,
+    responseSize: request.responseSize,
+    pageUrl: request.pageUrl,
+    // Only include essential body content (heavily truncated)
+    requestBody: truncateString(request.requestBody, MCP_BODY_TRUNCATE_LENGTH),
+    responseBody: truncateString(request.responseBody, MCP_BODY_TRUNCATE_LENGTH),
+    // Only include essential headers
+    contentType: request.responseHeaders?.['content-type'] || request.responseHeaders?.['Content-Type'],
+    // Add error context if it's a failed request
+    ...(request.statusCode && request.statusCode >= 400 && {
+      isError: true,
+      errorCategory: request.statusCode >= 500 ? 'server_error' : 'client_error'
+    })
+  };
+};
+
+// Helper function to estimate response size and truncate if needed
+const ensureResponseSize = (data: any): any => {
+  const jsonStr = JSON.stringify(data);
+  
+  // Rough estimate: 1 char ≈ 1 token for JSON
+  if (jsonStr.length > MCP_MAX_RESPONSE_SIZE) {
+    logger.warn(`MCP response too large (${jsonStr.length} chars), truncating...`);
+    
+    // If it's an array response, reduce the count
+    if (data.requests && Array.isArray(data.requests)) {
+      const maxItems = Math.floor(MCP_MAX_RESPONSE_SIZE / (jsonStr.length / data.requests.length));
+      return {
+        ...data,
+        requests: data.requests.slice(0, Math.max(1, maxItems)),
+        _truncated: true,
+        _originalCount: data.requests.length
+      };
+    }
+    
+    if (data.logs && Array.isArray(data.logs)) {
+      const maxItems = Math.floor(MCP_MAX_RESPONSE_SIZE / (jsonStr.length / data.logs.length));
+      return {
+        ...data,
+        logs: data.logs.slice(0, Math.max(1, maxItems)),
+        _truncated: true,
+        _originalCount: data.logs.length
+      };
+    }
+  }
+  
+  return data;
+};
 
 // Initialize database
 async function initializeDatabase() {
@@ -77,73 +148,73 @@ async function initializeDatabase() {
 const tools = [
   {
     name: "get_console_logs",
-    description: "Retrieve console logs with optional filters. Examples: get recent errors (level='error'), logs from specific site (url='example.com'), or logs in time range (startTime/endTime).",
+    description: "Retrieve console logs with optional filters",
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", default: 100, description: "Maximum number of logs to return" },
-        offset: { type: "number", default: 0, description: "Number of logs to skip (for pagination)" },
-        level: { type: "string", enum: ["log", "warn", "error", "info"], description: "Filter by log level" },
-        url: { type: "string", description: "Filter by page URL (partial match)" },
-        startTime: { type: "string", description: "Filter logs after this timestamp (ISO 8601)" },
-        endTime: { type: "string", description: "Filter logs before this timestamp (ISO 8601)" },
+        limit: { type: "number", default: 20 },
+        offset: { type: "number", default: 0 },
+        level: { type: "string", enum: ["log", "warn", "error", "info"] },
+        url: { type: "string" },
+        startTime: { type: "string" },
+        endTime: { type: "string" },
       },
-    },
-  },
-  {
-    name: "get_network_requests",
-    description: "Retrieve network requests with optional filters. Examples: get failed requests (statusCode=500), API calls (method='POST'), or requests to specific domain (url='api.example.com').",
-    inputSchema: {
-      type: "object",
-      properties: {
-        limit: { type: "number", default: 100, description: "Maximum number of requests to return" },
-        offset: { type: "number", default: 0, description: "Number of requests to skip (for pagination)" },
-        method: { type: "string", description: "Filter by HTTP method (GET, POST, etc.)" },
-        url: { type: "string", description: "Filter by URL (partial match)" },
-        statusCode: { type: "number", description: "Filter by HTTP status code" },
-        startTime: { type: "string", description: "Filter requests after this timestamp (ISO 8601)" },
-        endTime: { type: "string", description: "Filter requests before this timestamp (ISO 8601)" },
-      },
-    },
-  },
-  {
-    name: "search_logs",
-    description: "Search console logs by text query. Searches message and stack trace content.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "Search query to match against log message or stack trace" },
-        limit: { type: "number", default: 100 },
-      },
-      required: ["query"],
-    },
-  },
-  {
-    name: "search_network_requests",
-    description: "Search network requests by URL, headers, or body content. Searches across URL, request/response headers, and request/response bodies.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "Search query to match against URL, headers, or body content" },
-        limit: { type: "number", default: 100 },
-      },
-      required: ["query"],
     },
   },
   {
     name: "clear_console_logs",
-    description: "Clear all stored console logs. This permanently deletes all log entries from the database. Returns the number of logs deleted.",
+    description: "Clear all stored console logs",
     inputSchema: {
       type: "object",
       properties: {},
     },
   },
   {
+    name: "search_logs",
+    description: "Search console logs by text query",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query" },
+        limit: { type: "number", default: 20 },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "get_network_requests",
+    description: "Retrieve network requests with optional filters",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", default: 20 },
+        offset: { type: "number", default: 0 },
+        method: { type: "string" },
+        url: { type: "string" },
+        statusCode: { type: "number" },
+        startTime: { type: "string" },
+        endTime: { type: "string" },
+      },
+    },
+  },
+  {
     name: "clear_network_requests",
-    description: "Clear all stored network requests. This permanently deletes all request entries from the database. Returns the number of requests deleted.",
+    description: "Clear all stored network requests",
     inputSchema: {
       type: "object",
       properties: {},
+    },
+  },
+  {
+    name: "search_network_requests",
+    description: "Search network requests by URL, headers, or body content",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query to match against URL, headers, or body content" },
+        limit: { type: "number", default: 20 },
+      },
+      required: ["query"],
     },
   },
 ];
@@ -176,11 +247,33 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
         query += " WHERE " + conditions.join(" AND ");
       }
 
-      query += " ORDER BY id DESC LIMIT ? OFFSET ?";
-      params.push(args.limit || 100, args.offset || 0);
+      query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?";
+      params.push((args.limit as number) || 20, (args.offset as number) || 0);
 
-      const logs = await dbAll(query, params);
-      return { logs };
+      const rows = await dbAll(query, params);
+      const logs = rows.map((row: any) => ({
+        ...row,
+        metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      }));
+      return ensureResponseSize({ logs });
+    }
+
+    case "clear_console_logs": {
+      const result = await dbRun("DELETE FROM logs") as sqlite3.RunResult;
+      return { cleared: result.changes };
+    }
+
+    case "search_logs": {
+      const searchTerm = `%${args.query}%`;
+      const rows = await dbAll(
+        "SELECT * FROM logs WHERE message LIKE ? OR stackTrace LIKE ? ORDER BY timestamp DESC LIMIT ?",
+        [searchTerm, searchTerm, (args.limit as number) || 20]
+      );
+      const logs = rows.map((row: any) => ({
+        ...row,
+        metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      }));
+      return ensureResponseSize({ logs });
     }
 
     case "get_network_requests": {
@@ -213,49 +306,48 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
         query += " WHERE " + conditions.join(" AND ");
       }
 
-      query += " ORDER BY id DESC LIMIT ? OFFSET ?";
-      params.push(args.limit || 100, args.offset || 0);
+      query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?";
+      params.push((args.limit as number) || 20, (args.offset as number) || 0);
 
-      const requests = await dbAll(query, params);
-      return { requests };
-    }
-
-    case "search_logs": {
-      const query = `
-        SELECT * FROM logs 
-        WHERE message LIKE ? OR stackTrace LIKE ?
-        ORDER BY id DESC LIMIT ?
-      `;
-      const searchTerm = `%${args.query}%`;
-      const logs = await dbAll(query, [searchTerm, searchTerm, args.limit || 100]);
-      return { logs };
-    }
-
-    case "search_network_requests": {
-      const query = `
-        SELECT * FROM network_requests 
-        WHERE url LIKE ? 
-        OR requestHeaders LIKE ? 
-        OR responseHeaders LIKE ?
-        OR requestBody LIKE ?
-        OR responseBody LIKE ?
-        ORDER BY timestamp DESC LIMIT ?
-      `;
-      const searchTerm = `%${args.query}%`;
-      const requests = await dbAll(query, [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, args.limit || 100]);
-      return { requests };
-    }
-
-    case "clear_console_logs": {
-      const result = await dbGet("SELECT COUNT(*) as count FROM logs") as { count: number } | undefined;
-      await dbRun("DELETE FROM logs");
-      return { cleared: result?.count || 0 };
+      const rows = await dbAll(query, params);
+      const requests = rows.map((row: any) => ({
+        ...row,
+        requestHeaders: row.requestHeaders ? JSON.parse(row.requestHeaders) : undefined,
+        responseHeaders: row.responseHeaders ? JSON.parse(row.responseHeaders) : undefined,
+        metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      }));
+      
+      const minimalRequests = requests.map(createMinimalNetworkRequest);
+      return ensureResponseSize({ requests: minimalRequests });
     }
 
     case "clear_network_requests": {
-      const result = await dbGet("SELECT COUNT(*) as count FROM network_requests") as { count: number } | undefined;
-      await dbRun("DELETE FROM network_requests");
-      return { cleared: result?.count || 0 };
+      const result = await dbRun("DELETE FROM network_requests") as sqlite3.RunResult;
+      return { cleared: result.changes };
+    }
+
+    case "search_network_requests": {
+      const searchTerm = `%${args.query}%`;
+      const rows = await dbAll(
+        `SELECT * FROM network_requests 
+         WHERE url LIKE ? 
+         OR requestHeaders LIKE ? 
+         OR responseHeaders LIKE ?
+         OR requestBody LIKE ?
+         OR responseBody LIKE ?
+         ORDER BY timestamp DESC LIMIT ?`,
+        [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, (args.limit as number) || 20]
+      );
+      
+      const requests = rows.map((row: any) => ({
+        ...row,
+        requestHeaders: row.requestHeaders ? JSON.parse(row.requestHeaders) : undefined,
+        responseHeaders: row.responseHeaders ? JSON.parse(row.responseHeaders) : undefined,
+        metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      }));
+      
+      const minimalRequests = requests.map(createMinimalNetworkRequest);
+      return ensureResponseSize({ requests: minimalRequests });
     }
 
     default:
@@ -263,60 +355,58 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
   }
 };
 
-async function main() {
-  try {
-    // Initialize database
-    await initializeDatabase();
-    
-    const server = new Server(
-      {
-        name: "browser-relay",
-        version: "0.1.0",
+const setupMCPServer = async () => {
+  await initializeDatabase();
+  
+  const server = new Server(
+    {
+      name: "browser-relay",
+      version: "0.1.0",
+    },
+    {
+      capabilities: {
+        tools: {},
       },
-      {
-        capabilities: {
-          tools: {},
-        },
-      }
-    );
+    }
+  );
 
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools,
-    }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools,
+  }));
 
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      try {
-        const result = await handleToolCall(
-          request.params.name,
-          request.params.arguments || {}
-        );
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    });
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    try {
+      const result = await handleToolCall(
+        request.params.name,
+        request.params.arguments || {}
+      );
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    } catch (error) {
+      logger.error("MCP tool error:", error);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  });
 
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
 
-    // Keep the process running
-    process.stdin.resume();
-  } catch (error) {
-    console.error("Failed to start MCP server:", error);
-    process.exit(1);
-  }
-}
+  logger.info("MCP server started");
+};
 
-main();
+// Start the server
+setupMCPServer().catch((error) => {
+  logger.error("Failed to start MCP server:", error);
+  process.exit(1);
+});

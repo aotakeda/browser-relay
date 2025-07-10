@@ -52,24 +52,36 @@ npm run dev:server
 
 # Build server only
 npm run build:server
+
+# Build MCP server only
+npm run build:mcp
+
+# Build both HTTP and MCP servers
+npm run build:all
 ```
 
 ## Key Technical Details
 
 ### Database Schema
-- Single `logs` table with efficient indexing on `timestamp` and `domain`
-- Automatic cleanup maintains 10k most recent entries
+- Two main tables: `logs` for console logs and `network_requests` for network data
+- Efficient indexing on `timestamp` and `domain` for both tables
+- Automatic cleanup maintains 10k most recent entries per table (circular buffer)
 - Smart filtering excludes noise (images, tracking, ads, etc.)
 
 ### Extension Architecture
 - **background.js**: Service worker managing server communication and lifecycle
-- **content.js**: Injected script capturing console logs and network requests
+- **content.js**: Message relay script (ISOLATED world)
+- **inject.js**: Console/network capture script (MAIN world)
 - **Manifest v3**: Modern Chrome extension with proper permissions and CSP
+- **Dual script injection**: Uses both ISOLATED and MAIN worlds for comprehensive capture
 
 ### MCP Integration
 - Server implements MCP protocol for AI assistant access
-- Tools available: `get_logs`, `get_domains`, `stream_logs`
+- Tools available: `get_console_logs`, `get_network_requests`, `search_logs`, `search_network_requests`, `clear_console_logs`, `clear_network_requests`
 - Automatic server lifecycle management via extension
+- **Optimized for AI consumption**: Network requests return minimal essential fields only (method, url, statusCode, duration, pageUrl, contentType, truncated bodies)
+- **Response size limits**: Default limit reduced to 20 requests per query with 100k token response limit
+- **Body truncation**: Request/response bodies limited to 200 characters for debugging context
 
 ### Configuration
 - Server runs on fixed port 27497 (not configurable)
@@ -90,3 +102,8 @@ npm run build:server
 - Extension requires manual installation in developer mode
 - Database automatically manages storage limits with circular buffer
 - MCP server provides structured access for AI assistants
+- Network request capture includes response bodies (up to 50KB limit)
+- Both HTTP and MCP servers share the same SQLite database
+- Server uses TSX for development with hot reloading
+- **MCP responses are optimized for AI consumption**: Network requests return only essential debugging fields to avoid token limits
+- **Default MCP limits**: 20 requests per query, 200-char body truncation, 100k token response size limit

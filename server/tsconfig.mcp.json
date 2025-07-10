@@ -16,7 +16,11 @@
     "declarationMap": true,
     "allowSyntheticDefaultImports": true,
     "lib": ["ES2022"],
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["*"]
+    }
   },
   "include": ["src/mcp-standalone.ts"],
   "exclude": ["node_modules", "dist", "dist-mcp"]

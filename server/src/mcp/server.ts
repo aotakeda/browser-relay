@@ -4,11 +4,80 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { logStorage } from "@/storage/LogStorage";
-import { networkStorage } from "@/storage/NetworkStorage";
-import { logger } from "@/index";
+import { logStorage } from "../storage/LogStorage.js";
+import { networkStorage } from "../storage/NetworkStorage.js";
+import { logger } from "../index.js";
+import { NetworkRequest, ConsoleLog } from "../types.js";
 
 let mcpServer: Server | null = null;
+
+// Configuration for MCP response optimization
+const MCP_BODY_TRUNCATE_LENGTH = 200; // Keep bodies very short for debugging
+const MCP_MAX_RESPONSE_SIZE = 100000; // ~100k tokens max
+
+// Helper function to truncate large strings
+const truncateString = (str: string | null | undefined, maxLength: number): string | null => {
+  if (!str) return str || null;
+  if (str.length <= maxLength) return str;
+  return str.substring(0, maxLength) + `... [truncated ${str.length - maxLength} chars]`;
+};
+
+
+// Helper function to create minimal network request response with only essential debugging fields
+const createMinimalNetworkRequest = (request: NetworkRequest) => {
+  return {
+    method: request.method,
+    url: request.url,
+    statusCode: request.statusCode,
+    timestamp: request.timestamp,
+    duration: request.duration,
+    responseSize: request.responseSize,
+    pageUrl: request.pageUrl,
+    // Only include essential body content (heavily truncated)
+    requestBody: truncateString(request.requestBody, MCP_BODY_TRUNCATE_LENGTH),
+    responseBody: truncateString(request.responseBody, MCP_BODY_TRUNCATE_LENGTH),
+    // Only include essential headers
+    contentType: request.responseHeaders?.['content-type'] || request.responseHeaders?.['Content-Type'],
+    // Add error context if it's a failed request
+    ...(request.statusCode && request.statusCode >= 400 && {
+      isError: true,
+      errorCategory: request.statusCode >= 500 ? 'server_error' : 'client_error'
+    })
+  };
+};
+
+// Helper function to estimate response size and truncate if needed
+const ensureResponseSize = (data: any): any => {
+  const jsonStr = JSON.stringify(data);
+  
+  // Rough estimate: 1 char ≈ 1 token for JSON
+  if (jsonStr.length > MCP_MAX_RESPONSE_SIZE) {
+    logger.warn(`MCP response too large (${jsonStr.length} chars), truncating...`);
+    
+    // If it's an array response, reduce the count
+    if (data.requests && Array.isArray(data.requests)) {
+      const maxItems = Math.floor(MCP_MAX_RESPONSE_SIZE / (jsonStr.length / data.requests.length));
+      return {
+        ...data,
+        requests: data.requests.slice(0, Math.max(1, maxItems)),
+        _truncated: true,
+        _originalCount: data.requests.length
+      };
+    }
+    
+    if (data.logs && Array.isArray(data.logs)) {
+      const maxItems = Math.floor(MCP_MAX_RESPONSE_SIZE / (jsonStr.length / data.logs.length));
+      return {
+        ...data,
+        logs: data.logs.slice(0, Math.max(1, maxItems)),
+        _truncated: true,
+        _originalCount: data.logs.length
+      };
+    }
+  }
+  
+  return data;
+};
 
 const tools = [
   {
@@ -17,7 +86,7 @@ const tools = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", default: 100 },
+        limit: { type: "number", default: 20 },
         offset: { type: "number", default: 0 },
         level: { type: "string", enum: ["log", "warn", "error", "info"] },
         url: { type: "string" },
@@ -41,7 +110,7 @@ const tools = [
       type: "object",
       properties: {
         query: { type: "string", description: "Search query" },
-        limit: { type: "number", default: 100 },
+        limit: { type: "number", default: 20 },
       },
       required: ["query"],
     },
@@ -52,7 +121,7 @@ const tools = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", default: 100 },
+        limit: { type: "number", default: 20 },
         offset: { type: "number", default: 0 },
         method: { type: "string" },
         url: { type: "string" },
@@ -77,7 +146,7 @@ const tools = [
       type: "object",
       properties: {
         query: { type: "string", description: "Search query to match against URL, headers, or body content" },
-        limit: { type: "number", default: 100 },
+        limit: { type: "number", default: 20 },
       },
       required: ["query"],
     },
@@ -88,7 +157,7 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
   switch (name) {
     case "get_console_logs": {
       const logs = await logStorage.getLogs(
-        (args.limit as number) || 100,
+        (args.limit as number) || 20,
         (args.offset as number) || 0,
         {
           level: args.level as string,
@@ -97,7 +166,7 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
           endTime: args.endTime as string,
         }
       );
-      return { logs };
+      return ensureResponseSize({ logs });
     }
 
     case "clear_console_logs": {
@@ -106,13 +175,13 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
     }
 
     case "search_logs": {
-      const logs = await logStorage.searchLogs(args.query as string, (args.limit as number) || 100);
+      const logs = await logStorage.searchLogs(args.query as string, (args.limit as number) || 20);
       return { logs };
     }
 
     case "get_network_requests": {
       const requests = await networkStorage.getRequests(
-        (args.limit as number) || 100,
+        (args.limit as number) || 20,
         (args.offset as number) || 0,
         {
           method: args.method as string,
@@ -122,7 +191,8 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
           endTime: args.endTime as string,
         }
       );
-      return { requests };
+      const minimalRequests = requests.map(createMinimalNetworkRequest);
+      return ensureResponseSize({ requests: minimalRequests });
     }
 
     case "clear_network_requests": {
@@ -133,9 +203,10 @@ const handleToolCall = async (name: string, args: Record<string, unknown>) => {
     case "search_network_requests": {
       const requests = await networkStorage.searchRequests(
         args.query as string,
-        (args.limit as number) || 100
+        (args.limit as number) || 20
       );
-      return { requests };
+      const minimalRequests = requests.map(createMinimalNetworkRequest);
+      return ensureResponseSize({ requests: minimalRequests });
     }
 
     default:
@@ -198,3 +269,25 @@ export const setupMCPServer = async () => {
 };
 
 export const getMCPServer = (): Server | null => mcpServer;
+
+// Standalone mode - detect if this module is being run directly
+const isStandalone = () => {
+  try {
+    // Check if this module is the main module being executed
+    return process.argv[1] && process.argv[1].includes('mcp/server.js');
+  } catch {
+    return false;
+  }
+};
+
+if (isStandalone()) {
+  (async () => {
+    try {
+      await setupMCPServer();
+      logger.info("MCP server started in standalone mode");
+    } catch (error) {
+      logger.error("Failed to start MCP server:", error);
+      process.exit(1);
+    }
+  })();
+}

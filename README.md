@@ -174,23 +174,23 @@ The MCP server allows you to access captured logs directly from Claude Code for 
 Use the Claude Code CLI to add the MCP server:
 
 ```bash
-claude mcp add browser-relay node /full/path/to/browser-relay/server/dist-mcp/mcp-standalone.js
+claude mcp add browser-relay node ~/console/server/dist-mcp/mcp-standalone.js
 ```
 
-Replace `/full/path/to` with the actual path to your project directory.
+Replace `~` with your home directory path if needed, or use the full absolute path.
 
 **Alternative Installation Methods:**
 
 For project-specific configuration (shared with team):
 
 ```bash
-claude mcp add browser-relay node /Users/arthurtakeda/console/server/dist-mcp/mcp-standalone.js --scope project
+claude mcp add browser-relay node ~/console/server/dist-mcp/mcp-standalone.js --scope project
 ```
 
 For user-wide configuration (available in all projects):
 
 ```bash
-claude mcp add browser-relay node /Users/arthurtakeda/console/server/dist-mcp/mcp-standalone.js --scope user
+claude mcp add browser-relay node ~/console/server/dist-mcp/mcp-standalone.js --scope user
 ```
 
 **Verify Installation:**
