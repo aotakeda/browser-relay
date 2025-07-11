@@ -13,7 +13,7 @@ import path from "path";
 import { existsSync, mkdirSync } from "fs";
 import { fileURLToPath } from 'url';
 
-// Database setup - use absolute path to the actual Browser Relay database
+// Database setup - use same path as main server
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const dataDir = path.join(__dirname, '..', 'data');

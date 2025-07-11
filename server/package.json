@@ -1,6 +1,6 @@
 {
   "name": "browser-relay",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "description": "Chrome extension and HTTP/MCP server for relaying console logs locally",
   "main": "dist/index.js",
   "bin": {
