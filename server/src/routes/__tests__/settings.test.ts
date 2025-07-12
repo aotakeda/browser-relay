@@ -19,6 +19,7 @@ jest.mock('@/storage/SettingsStorage', () => ({
 jest.mock('@/index', () => ({
   logger: {
     info: jest.fn(),
+    warn: jest.fn(),
     error: jest.fn()
   }
 }));
@@ -41,7 +42,6 @@ describe('Settings Router', () => {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: false,
         specificDomains: ['localhost:3000', 'localhost:4321']
       };
 
@@ -68,7 +68,6 @@ describe('Settings Router', () => {
     it('should update settings successfully', async () => {
       const updates = {
         logsEnabled: false,
-        allDomainsMode: false,
         specificDomains: ['localhost:3000']
       };
 
@@ -76,7 +75,6 @@ describe('Settings Router', () => {
         logsEnabled: false,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: false,
         specificDomains: ['localhost:3000']
       };
 
@@ -176,7 +174,6 @@ describe('Settings Router', () => {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: true,
         specificDomains: []
       };
 
@@ -353,7 +350,6 @@ describe('Settings Router', () => {
   describe('Domain filtering scenarios', () => {
     it('should handle switching from all domains to specific domains', async () => {
       const updates = {
-        allDomainsMode: false,
         specificDomains: ['localhost:3000', 'localhost:4321']
       };
 
@@ -361,7 +357,6 @@ describe('Settings Router', () => {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: false,
         specificDomains: ['localhost:3000', 'localhost:4321']
       };
 
@@ -372,13 +367,11 @@ describe('Settings Router', () => {
         .send(updates);
 
       expect(response.status).toBe(200);
-      expect(response.body.settings.allDomainsMode).toBe(false);
       expect(response.body.settings.specificDomains).toEqual(['localhost:3000', 'localhost:4321']);
     });
 
-    it('should handle switching from specific domains to all domains', async () => {
+    it('should handle clearing specific domains list', async () => {
       const updates = {
-        allDomainsMode: true,
         specificDomains: []
       };
 
@@ -386,7 +379,6 @@ describe('Settings Router', () => {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: true,
         specificDomains: []
       };
 
@@ -397,7 +389,6 @@ describe('Settings Router', () => {
         .send(updates);
 
       expect(response.status).toBe(200);
-      expect(response.body.settings.allDomainsMode).toBe(true);
       expect(response.body.settings.specificDomains).toEqual([]);
     });
 
@@ -411,7 +402,6 @@ describe('Settings Router', () => {
       ];
 
       const updates = {
-        allDomainsMode: false,
         specificDomains: domains
       };
 
@@ -419,7 +409,6 @@ describe('Settings Router', () => {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: false,
         specificDomains: domains
       };
 

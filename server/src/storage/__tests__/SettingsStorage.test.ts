@@ -35,7 +35,6 @@ describe('SettingsStorage', () => {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: true,
         specificDomains: []
       });
     });
@@ -43,7 +42,6 @@ describe('SettingsStorage', () => {
     it('should return settings from database with proper defaults', async () => {
       mockSettingsAllAsync.mockResolvedValue([
         { key: 'logsEnabled', value: 'false', updated_at: '2023-01-01' },
-        { key: 'allDomainsMode', value: 'false', updated_at: '2023-01-01' },
         { key: 'specificDomains', value: '["localhost:3000", "localhost:4321"]', updated_at: '2023-01-01' }
       ]);
 
@@ -53,7 +51,6 @@ describe('SettingsStorage', () => {
         logsEnabled: false,
         networkEnabled: true, // default
         mcpEnabled: false, // default
-        allDomainsMode: false,
         specificDomains: ['localhost:3000', 'localhost:4321']
       });
     });
@@ -63,7 +60,6 @@ describe('SettingsStorage', () => {
       
       mockSettingsAllAsync.mockResolvedValue([
         { key: 'logsEnabled', value: 'invalid-json', updated_at: '2023-01-01' },
-        { key: 'allDomainsMode', value: 'true', updated_at: '2023-01-01' }
       ]);
 
       const settings = await settingsStorage.getSettings();
@@ -72,7 +68,6 @@ describe('SettingsStorage', () => {
         logsEnabled: true, // default due to parse error
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: true,
         specificDomains: []
       });
       
@@ -164,22 +159,19 @@ describe('SettingsStorage', () => {
       mockSettingsRunAsync.mockResolvedValue({ changes: 1, lastID: 1 });
       mockSettingsAllAsync.mockResolvedValue([
         { key: 'logsEnabled', value: 'false', updated_at: '2023-01-01' },
-        { key: 'allDomainsMode', value: 'false', updated_at: '2023-01-01' },
         { key: 'specificDomains', value: '["localhost:3000"]', updated_at: '2023-01-01' }
       ]);
 
       const updates = {
         logsEnabled: false,
-        allDomainsMode: false,
         specificDomains: ['localhost:3000']
       };
 
       const result = await settingsStorage.updateSettings(updates);
 
-      expect(mockSettingsRunAsync).toHaveBeenCalledTimes(3);
+      expect(mockSettingsRunAsync).toHaveBeenCalledTimes(2);
       expect(result).toEqual(expect.objectContaining({
         logsEnabled: false,
-        allDomainsMode: false,
         specificDomains: ['localhost:3000']
       }));
     });
@@ -190,7 +182,6 @@ describe('SettingsStorage', () => {
 
       const updates = {
         logsEnabled: false,
-        allDomainsMode: undefined,
         specificDomains: ['localhost:3000']
       };
 
@@ -211,7 +202,6 @@ describe('SettingsStorage', () => {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: true,
         specificDomains: []
       });
     });
@@ -229,25 +219,21 @@ describe('SettingsStorage', () => {
   describe('domain filtering logic', () => {
     it('should handle specific domains mode correctly', async () => {
       mockSettingsAllAsync.mockResolvedValue([
-        { key: 'allDomainsMode', value: 'false', updated_at: '2023-01-01' },
         { key: 'specificDomains', value: '["localhost:3000", "localhost:4321"]', updated_at: '2023-01-01' }
       ]);
 
       const settings = await settingsStorage.getSettings();
 
-      expect(settings.allDomainsMode).toBe(false);
       expect(settings.specificDomains).toEqual(['localhost:3000', 'localhost:4321']);
     });
 
-    it('should handle all domains mode correctly', async () => {
+    it('should handle empty domains list correctly', async () => {
       mockSettingsAllAsync.mockResolvedValue([
-        { key: 'allDomainsMode', value: 'true', updated_at: '2023-01-01' },
         { key: 'specificDomains', value: '[]', updated_at: '2023-01-01' }
       ]);
 
       const settings = await settingsStorage.getSettings();
 
-      expect(settings.allDomainsMode).toBe(true);
       expect(settings.specificDomains).toEqual([]);
     });
   });

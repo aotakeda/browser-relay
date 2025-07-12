@@ -15,7 +15,6 @@
   let logsEnabled = true;
   let networkEnabled = true;
   let shouldCaptureDomain = false;
-  let allDomainsMode = true; // eslint-disable-line unused-imports/no-unused-vars
   let specificDomains = []; // eslint-disable-line unused-imports/no-unused-vars
   let networkConfig = null;
   let settingsReceived = false;
@@ -226,7 +225,6 @@
     logsEnabled = event.data.logsEnabled;
     networkEnabled = event.data.networkEnabled;
     shouldCaptureDomain = event.data.shouldCapture;
-    allDomainsMode = event.data.allDomainsMode;
     specificDomains = event.data.specificDomains || [];
     settingsReceived = true; // Mark settings as received
 

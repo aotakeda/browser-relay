@@ -11,7 +11,6 @@ let networkRequestsBuffer = [];
 let logsEnabled = true; // Default to enabled
 let networkEnabled = true; // Default to enabled
 let mcpEnabled = false; // Default to disabled for MCP
-let allDomainsMode = false; // Default to specific domains only (safer)
 let specificDomains = []; // Default to empty array
 
 // Load settings from server
@@ -29,7 +28,6 @@ const loadSettingsFromServer = async () => {
       logsEnabled = settings.logsEnabled !== false; // default to true
       networkEnabled = settings.networkEnabled !== false; // default to true
       mcpEnabled = settings.mcpEnabled === true; // default to false for MCP
-      allDomainsMode = settings.allDomainsMode === true; // default to false (safer)
       specificDomains = settings.specificDomains || []; // default to empty array
       
       console.log('[Browser Relay] Settings loaded from server:', settings);
@@ -183,17 +181,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendNetworkRequestsWithRetry(message.requests);
     sendResponse({ received: true });
   } else if (message.type === "CONTENT_SCRIPT_READY") {
-    sendResponse({ sessionId, logsEnabled, networkEnabled, mcpEnabled, allDomainsMode, specificDomains });
+    sendResponse({ sessionId, logsEnabled, networkEnabled, mcpEnabled, specificDomains });
   } else if (message.type === "DOMAIN_SETTINGS_CHANGED") {
-    allDomainsMode = message.allDomainsMode;
     specificDomains = message.specificDomains;
+    
+    // Log warning if no domains specified
+    if (specificDomains.length === 0) {
+      console.warn('[Browser Relay] No domains specified - extension will not capture any logs or network requests. Please add domains in the extension popup.');
+    }
     
     // Save to server (async)
     fetch('http://localhost:27497/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        allDomainsMode, 
         specificDomains 
       }),
       signal: AbortSignal.timeout(3000)
@@ -206,7 +207,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       tabs.forEach(tab => {
         chrome.tabs.sendMessage(tab.id, {
           type: 'DOMAIN_SETTINGS_CHANGED',
-          allDomainsMode,
           specificDomains
         }).catch(() => {
           // Ignore errors for tabs that don't have content scripts

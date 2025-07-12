@@ -8,7 +8,6 @@ export interface ExtensionSettings {
   logsEnabled: boolean;
   networkEnabled: boolean;
   mcpEnabled: boolean;
-  allDomainsMode: boolean;
   specificDomains: string[];
 }
 
@@ -43,7 +42,6 @@ class SettingsStorage {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: true,
         specificDomains: []
       };
 
@@ -144,7 +142,6 @@ class SettingsStorage {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: true,
         specificDomains: []
       };
 

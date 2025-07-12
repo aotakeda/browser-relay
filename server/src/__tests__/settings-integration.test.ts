@@ -52,7 +52,6 @@ describe('Settings Integration Tests', () => {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: true,
         specificDomains: []
       });
 
@@ -60,18 +59,15 @@ describe('Settings Integration Tests', () => {
       const updateResponse = await request(app)
         .post('/settings')
         .send({
-          allDomainsMode: false,
-          specificDomains: ['localhost:3000', 'localhost:4321']
+            specificDomains: ['localhost:3000', 'localhost:4321']
         });
 
       expect(updateResponse.status).toBe(200);
-      expect(updateResponse.body.settings.allDomainsMode).toBe(false);
       expect(updateResponse.body.settings.specificDomains).toEqual(['localhost:3000', 'localhost:4321']);
 
       // 3. Verify settings persisted
       const verifyResponse = await request(app).get('/settings');
       expect(verifyResponse.status).toBe(200);
-      expect(verifyResponse.body.settings.allDomainsMode).toBe(false);
       expect(verifyResponse.body.settings.specificDomains).toEqual(['localhost:3000', 'localhost:4321']);
 
       // 4. Update individual setting
@@ -86,7 +82,6 @@ describe('Settings Integration Tests', () => {
       const finalVerifyResponse = await request(app).get('/settings');
       expect(finalVerifyResponse.status).toBe(200);
       expect(finalVerifyResponse.body.settings.logsEnabled).toBe(false);
-      expect(finalVerifyResponse.body.settings.allDomainsMode).toBe(false);
       expect(finalVerifyResponse.body.settings.specificDomains).toEqual(['localhost:3000', 'localhost:4321']);
 
       // 6. Reset to defaults
@@ -96,7 +91,6 @@ describe('Settings Integration Tests', () => {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: true,
         specificDomains: []
       });
     });
@@ -106,7 +100,6 @@ describe('Settings Integration Tests', () => {
       const devSetup = await request(app)
         .post('/settings')
         .send({
-          allDomainsMode: false,
           specificDomains: ['localhost:3000', 'localhost:3001', 'localhost:4321']
         });
 
@@ -117,8 +110,7 @@ describe('Settings Integration Tests', () => {
       const prodSetup = await request(app)
         .post('/settings')
         .send({
-          allDomainsMode: false,
-          specificDomains: ['app.example.com', 'api.example.com', 'admin.example.com']
+            specificDomains: ['app.example.com', 'api.example.com', 'admin.example.com']
         });
 
       expect(prodSetup.status).toBe(200);
@@ -128,8 +120,7 @@ describe('Settings Integration Tests', () => {
       const mixedSetup = await request(app)
         .post('/settings')
         .send({
-          allDomainsMode: false,
-          specificDomains: ['127.0.0.1:8080', '192.168.1.100:3000', 'localhost:4321']
+            specificDomains: ['127.0.0.1:8080', '192.168.1.100:3000', 'localhost:4321']
         });
 
       expect(mixedSetup.status).toBe(200);
@@ -142,7 +133,7 @@ describe('Settings Integration Tests', () => {
         request(app).post('/settings').send({ logsEnabled: false }),
         request(app).post('/settings').send({ networkEnabled: false }),
         request(app).post('/settings').send({ specificDomains: ['localhost:3000'] }),
-        request(app).post('/settings').send({ allDomainsMode: false }),
+        request(app).post('/settings').send({ specificDomains: ['localhost:3000'] }),
         request(app).post('/settings').send({ mcpEnabled: true })
       ];
 
@@ -163,7 +154,6 @@ describe('Settings Integration Tests', () => {
       expect(typeof settings.logsEnabled).toBe('boolean');
       expect(typeof settings.networkEnabled).toBe('boolean');
       expect(typeof settings.mcpEnabled).toBe('boolean');
-      expect(typeof settings.allDomainsMode).toBe('boolean');
       expect(Array.isArray(settings.specificDomains)).toBe(true);
     });
 
@@ -174,8 +164,7 @@ describe('Settings Integration Tests', () => {
         .send({
           logsEnabled: false,
           networkEnabled: false,
-          allDomainsMode: false,
-          specificDomains: ['localhost:3000', 'localhost:4321']
+            specificDomains: ['localhost:3000', 'localhost:4321']
         });
 
       // Verify initial state
@@ -200,16 +189,15 @@ describe('Settings Integration Tests', () => {
       await request(app)
         .post('/settings')
         .send({
-          allDomainsMode: false,
-          specificDomains: ['localhost:3000', 'localhost:4321']
+            specificDomains: ['localhost:3000', 'localhost:4321']
         });
 
       const settings = await request(app).get('/settings');
-      const { allDomainsMode, specificDomains } = settings.body.settings;
+      const { specificDomains } = settings.body.settings;
 
       // Simulate domain filtering logic
       const shouldCaptureDomain = (hostname: string, port: string) => {
-        if (allDomainsMode) {
+        if (specificDomains.length === 0) {
           return true;
         }
 
@@ -239,8 +227,7 @@ describe('Settings Integration Tests', () => {
       await request(app)
         .post('/settings')
         .send({
-          allDomainsMode: false,
-          specificDomains: []
+            specificDomains: []
         });
 
       const emptySettings = await request(app).get('/settings');
@@ -250,8 +237,7 @@ describe('Settings Integration Tests', () => {
       await request(app)
         .post('/settings')
         .send({
-          allDomainsMode: false,
-          specificDomains: ['localhost:4321']
+            specificDomains: ['localhost:4321']
         });
 
       const singleSettings = await request(app).get('/settings');
@@ -261,12 +247,11 @@ describe('Settings Integration Tests', () => {
       await request(app)
         .post('/settings')
         .send({
-          allDomainsMode: true,
-          specificDomains: []
+            specificDomains: []
         });
 
       const allDomainsSettings = await request(app).get('/settings');
-      expect(allDomainsSettings.body.settings.allDomainsMode).toBe(true);
+      expect(allDomainsSettings.body.settings.specificDomains).toEqual([]);
       expect(allDomainsSettings.body.settings.specificDomains).toEqual([]);
     });
   });
@@ -292,8 +277,7 @@ describe('Settings Integration Tests', () => {
         .post('/settings')
         .send({
           logsEnabled: false,
-          allDomainsMode: false,
-          specificDomains: ['localhost:3000']
+            specificDomains: ['localhost:3000']
         });
 
       // Verify settings were saved
@@ -315,7 +299,6 @@ describe('Settings Integration Tests', () => {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        allDomainsMode: true,
         specificDomains: []
       });
     });
@@ -366,8 +349,7 @@ describe('Settings Integration Tests', () => {
       const response = await request(app)
         .post('/settings')
         .send({
-          allDomainsMode: false,
-          specificDomains: largeDomainList
+            specificDomains: largeDomainList
         });
 
       const endTime = Date.now();

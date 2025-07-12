@@ -4,9 +4,8 @@
   const contentEl = document.getElementById("content");
   const statusEl = document.getElementById("status");
   const statusTextEl = document.getElementById("status-text");
-  const domainModeToggleEl = document.getElementById("domain-mode-toggle");
   const specificDomainsEl = document.getElementById("specific-domains");
-  const allDomainsTextEl = document.getElementById("all-domains-text");
+  const noDomainsWarningEl = document.getElementById("no-domains-warning");
   const domainInputEl = document.getElementById("domain-input");
   const addDomainBtnEl = document.getElementById("add-domain-btn");
   const domainsListEl = document.getElementById("domains-list");
@@ -35,7 +34,6 @@
   let networkEnabled = true;
   let mcpEnabled = false; // Default to false for MCP mode
   let isConnected = false;
-  let allDomainsMode = true; // true = all domains, false = specific domains
   let specificDomains = []; // array of domain strings
   
   // Network configuration state
@@ -121,7 +119,6 @@
           logsEnabled = settings.logsEnabled !== false; // default to true
           networkEnabled = settings.networkEnabled !== false; // default to true
           mcpEnabled = settings.mcpEnabled === true; // default to false for MCP
-          allDomainsMode = settings.allDomainsMode !== false; // default to true
           specificDomains = settings.specificDomains || []; // default to empty array
         } else {
           console.warn('[Browser Relay] Failed to load settings from server, using defaults');
@@ -129,7 +126,6 @@
           logsEnabled = true;
           networkEnabled = true;
           mcpEnabled = false;
-          allDomainsMode = true;
           specificDomains = [];
         }
       } catch (error) {
@@ -138,7 +134,6 @@
         logsEnabled = true;
         networkEnabled = true;
         mcpEnabled = false;
-        allDomainsMode = true;
         specificDomains = [];
       }
 
@@ -175,7 +170,6 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          allDomainsMode,
           specificDomains,
         }),
         signal: AbortSignal.timeout(3000)
@@ -187,7 +181,6 @@
     // Notify background script of domain changes
     await chrome.runtime.sendMessage({
       type: "DOMAIN_SETTINGS_CHANGED",
-      allDomainsMode,
       specificDomains,
     });
   };
@@ -291,53 +284,27 @@
   };
 
 
-  const toggleDomainMode = async () => {
-    allDomainsMode = !allDomainsMode;
-    await saveDomainSettings();
-    updateDomainsDisplay();
-  };
 
   // Update domains display
   const updateDomainsDisplay = () => {
-    // Update mode toggle
-    domainModeToggleEl.className = "toggle-small";
-    if (!allDomainsMode) {
-      domainModeToggleEl.classList.add("enabled");
-    }
-    domainModeToggleEl.setAttribute(
-      "aria-checked",
-      (!allDomainsMode).toString()
-    );
-
-    // Update toggle labels
-    const labels = document.querySelectorAll(".toggle-label-small");
-    labels[0].className = allDomainsMode
-      ? "toggle-label-small active"
-      : "toggle-label-small";
-    labels[1].className = !allDomainsMode
-      ? "toggle-label-small active"
-      : "toggle-label-small";
-
-    // Show/hide appropriate sections
-    if (allDomainsMode) {
-      specificDomainsEl.style.display = "none";
-      allDomainsTextEl.style.display = "block";
+    // Show warning if no domains are specified
+    if (specificDomains.length === 0) {
+      noDomainsWarningEl.style.display = "block";
     } else {
-      specificDomainsEl.style.display = "block";
-      allDomainsTextEl.style.display = "none";
-
-      // Update domains list
-      domainsListEl.innerHTML = specificDomains
-        .map(
-          (domain) => `
-          <div class="domain-tag">
-            ${domain}
-            <span class="domain-remove" data-domain="${domain}">×</span>
-          </div>
-        `
-        )
-        .join("");
+      noDomainsWarningEl.style.display = "none";
     }
+
+    // Update domains list
+    domainsListEl.innerHTML = specificDomains
+      .map(
+        (domain) => `
+        <div class="domain-tag">
+          ${domain}
+          <span class="domain-remove" data-domain="${domain}">×</span>
+        </div>
+      `
+      )
+      .join("");
   };
 
   // Update network configuration display
@@ -692,13 +659,6 @@
   clearNetworkBtn.addEventListener("click", clearNetwork);
 
   // Domain management event listeners
-  domainModeToggleEl.addEventListener("click", toggleDomainMode);
-  domainModeToggleEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      toggleDomainMode();
-    }
-  });
 
   addDomainBtnEl.addEventListener("click", addDomain);
 

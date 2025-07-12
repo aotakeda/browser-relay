@@ -2,13 +2,19 @@
 (() => {
   let logsEnabled = true;
   let networkEnabled = true;
-  let allDomainsMode = true;
   let specificDomains = [];
+  let settingsLoaded = false;
 
   // Check if current domain should be captured
   const shouldCaptureDomain = () => {
-    if (allDomainsMode) {
-      return true;
+    // If settings haven't loaded yet, don't capture and don't show warning
+    if (!settingsLoaded) {
+      return false;
+    }
+    
+    // Only capture from explicitly listed domains
+    if (!specificDomains || specificDomains.length === 0) {
+      return false;
     }
 
     const hostname = window.location.hostname;
@@ -16,17 +22,17 @@
     const hostWithPort = port ? `${hostname}:${port}` : hostname;
 
     return specificDomains.some((domain) => {
-      // First check exact match with host:port
+      // Exact match with host:port (e.g., localhost:3000)
       if (hostWithPort === domain) {
         return true;
       }
 
-      // Then check hostname-only match (for domains without ports)
+      // Hostname-only match (e.g., example.com)
       if (hostname === domain) {
         return true;
       }
 
-      // Finally check subdomain match (for domains without ports)
+      // Subdomain match (e.g., api.example.com matches example.com)
       if (hostname.endsWith("." + domain)) {
         return true;
       }
@@ -81,7 +87,6 @@
         type: "BROWSER_RELAY_SETTINGS",
         logsEnabled,
         networkEnabled,
-        allDomainsMode,
         specificDomains,
         shouldCapture: shouldCaptureDomain(),
       },
@@ -100,12 +105,12 @@
         if (typeof response.networkEnabled === "boolean") {
           networkEnabled = response.networkEnabled;
         }
-        if (typeof response.allDomainsMode === "boolean") {
-          allDomainsMode = response.allDomainsMode;
-        }
         if (Array.isArray(response.specificDomains)) {
           specificDomains = response.specificDomains;
         }
+
+        // Mark settings as loaded
+        settingsLoaded = true;
 
         // Notify inject script of all settings
         notifyInjectScript();
@@ -122,8 +127,8 @@
       networkEnabled = message.enabled;
       notifyInjectScript();
     } else if (message.type === "DOMAIN_SETTINGS_CHANGED") {
-      allDomainsMode = message.allDomainsMode;
       specificDomains = message.specificDomains;
+      settingsLoaded = true; // Ensure this is set when domains change
       notifyInjectScript();
     }
   });

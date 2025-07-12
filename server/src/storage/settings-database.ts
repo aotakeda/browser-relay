@@ -108,7 +108,6 @@ export async function initializeSettingsDatabase() {
       logsEnabled: true,
       networkEnabled: true,
       mcpEnabled: false,
-      allDomainsMode: true,
       specificDomains: []
     };
 

@@ -21,7 +21,7 @@ settingsRouter.post("/", async (req, res) => {
     const updates: Partial<ExtensionSettings> = req.body;
 
     // Validate the updates
-    const validKeys = ['logsEnabled', 'networkEnabled', 'mcpEnabled', 'allDomainsMode', 'specificDomains'];
+    const validKeys = ['logsEnabled', 'networkEnabled', 'mcpEnabled', 'specificDomains'];
     const invalidKeys = Object.keys(updates).filter(key => !validKeys.includes(key));
     
     if (invalidKeys.length > 0) {
@@ -43,10 +43,6 @@ settingsRouter.post("/", async (req, res) => {
       return res.status(400).json({ error: 'mcpEnabled must be a boolean' });
     }
     
-    if (updates.allDomainsMode !== undefined && typeof updates.allDomainsMode !== 'boolean') {
-      return res.status(400).json({ error: 'allDomainsMode must be a boolean' });
-    }
-    
     if (updates.specificDomains !== undefined) {
       if (!Array.isArray(updates.specificDomains)) {
         return res.status(400).json({ error: 'specificDomains must be an array' });
@@ -57,6 +53,11 @@ settingsRouter.post("/", async (req, res) => {
         if (typeof domain !== 'string') {
           return res.status(400).json({ error: 'All domains must be strings' });
         }
+      }
+      
+      // Warn if no domains specified
+      if (updates.specificDomains.length === 0) {
+        logger.warn("No domains specified in settings - extension will not capture any logs or network requests. User should add domains through the extension popup.");
       }
     }
 
@@ -94,7 +95,7 @@ settingsRouter.get("/:key", async (req, res) => {
   try {
     const { key } = req.params;
     
-    const validKeys = ['logsEnabled', 'networkEnabled', 'mcpEnabled', 'allDomainsMode', 'specificDomains'];
+    const validKeys = ['logsEnabled', 'networkEnabled', 'mcpEnabled', 'specificDomains'];
     if (!validKeys.includes(key)) {
       return res.status(400).json({ error: `Invalid setting key: ${key}` });
     }
@@ -118,7 +119,7 @@ settingsRouter.put("/:key", async (req, res) => {
     const { key } = req.params;
     const { value } = req.body;
 
-    const validKeys = ['logsEnabled', 'networkEnabled', 'mcpEnabled', 'allDomainsMode', 'specificDomains'];
+    const validKeys = ['logsEnabled', 'networkEnabled', 'mcpEnabled', 'specificDomains'];
     if (!validKeys.includes(key)) {
       return res.status(400).json({ error: `Invalid setting key: ${key}` });
     }
@@ -128,7 +129,7 @@ settingsRouter.put("/:key", async (req, res) => {
     }
 
     // Type validation based on key
-    if (['logsEnabled', 'networkEnabled', 'mcpEnabled', 'allDomainsMode'].includes(key)) {
+    if (['logsEnabled', 'networkEnabled', 'mcpEnabled'].includes(key)) {
       if (typeof value !== 'boolean') {
         return res.status(400).json({ error: `${key} must be a boolean` });
       }
@@ -143,6 +144,11 @@ settingsRouter.put("/:key", async (req, res) => {
         if (typeof domain !== 'string') {
           return res.status(400).json({ error: 'All domains must be strings' });
         }
+      }
+      
+      // Warn if no domains specified
+      if (value.length === 0) {
+        logger.warn("No domains specified in settings - extension will not capture any logs or network requests. User should add domains through the extension popup.");
       }
     }
 
