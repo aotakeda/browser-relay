@@ -107,20 +107,40 @@
   // Load current state
   const loadState = async () => {
     try {
-      // Get current enabled states and domain configuration from storage
-      const result = await chrome.storage.local.get([
-        "logsEnabled",
-        "networkEnabled",
-        "mcpEnabled",
-        "allDomainsMode",
-        "specificDomains",
-      ]);
-
-      logsEnabled = result.logsEnabled !== false; // default to true
-      networkEnabled = result.networkEnabled !== false; // default to true
-      mcpEnabled = result.mcpEnabled === true; // default to false for MCP
-      allDomainsMode = result.allDomainsMode !== false; // default to true
-      specificDomains = result.specificDomains || []; // default to empty array
+      // Get current enabled states and domain configuration from server
+      try {
+        const response = await fetch('http://localhost:27497/settings', {
+          method: 'GET',
+          signal: AbortSignal.timeout(3000)
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const settings = data.settings;
+          
+          logsEnabled = settings.logsEnabled !== false; // default to true
+          networkEnabled = settings.networkEnabled !== false; // default to true
+          mcpEnabled = settings.mcpEnabled === true; // default to false for MCP
+          allDomainsMode = settings.allDomainsMode !== false; // default to true
+          specificDomains = settings.specificDomains || []; // default to empty array
+        } else {
+          console.warn('[Browser Relay] Failed to load settings from server, using defaults');
+          // Use default values
+          logsEnabled = true;
+          networkEnabled = true;
+          mcpEnabled = false;
+          allDomainsMode = true;
+          specificDomains = [];
+        }
+      } catch (error) {
+        console.warn('[Browser Relay] Error loading settings from server:', error);
+        // Use default values
+        logsEnabled = true;
+        networkEnabled = true;
+        mcpEnabled = false;
+        allDomainsMode = true;
+        specificDomains = [];
+      }
 
       // Check server connection
       try {
@@ -149,10 +169,20 @@
 
   // Domain management functions
   const saveDomainSettings = async () => {
-    await chrome.storage.local.set({
-      allDomainsMode,
-      specificDomains,
-    });
+    try {
+      // Save to server
+      await fetch('http://localhost:27497/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          allDomainsMode,
+          specificDomains,
+        }),
+        signal: AbortSignal.timeout(3000)
+      });
+    } catch (error) {
+      console.warn('[Browser Relay] Failed to save domain settings to server:', error);
+    }
 
     // Notify background script of domain changes
     await chrome.runtime.sendMessage({
@@ -470,8 +500,17 @@
     try {
       logsEnabled = !logsEnabled;
 
-      // Save to storage
-      await chrome.storage.local.set({ logsEnabled });
+      // Save to server
+      try {
+        await fetch('http://localhost:27497/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ logsEnabled }),
+          signal: AbortSignal.timeout(3000)
+        });
+      } catch (error) {
+        console.warn('[Browser Relay] Failed to save logs setting to server:', error);
+      }
 
       // Notify background script
       await chrome.runtime.sendMessage({
@@ -495,8 +534,17 @@
     try {
       networkEnabled = !networkEnabled;
 
-      // Save to storage
-      await chrome.storage.local.set({ networkEnabled });
+      // Save to server
+      try {
+        await fetch('http://localhost:27497/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ networkEnabled }),
+          signal: AbortSignal.timeout(3000)
+        });
+      } catch (error) {
+        console.warn('[Browser Relay] Failed to save network setting to server:', error);
+      }
 
       // Notify background script
       await chrome.runtime.sendMessage({
@@ -520,8 +568,17 @@
     try {
       mcpEnabled = !mcpEnabled;
 
-      // Save to storage
-      await chrome.storage.local.set({ mcpEnabled });
+      // Save to server
+      try {
+        await fetch('http://localhost:27497/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mcpEnabled }),
+          signal: AbortSignal.timeout(3000)
+        });
+      } catch (error) {
+        console.warn('[Browser Relay] Failed to save MCP setting to server:', error);
+      }
 
       // Notify background script to inform server
       await chrome.runtime.sendMessage({

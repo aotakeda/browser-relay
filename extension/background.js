@@ -11,8 +11,35 @@ let networkRequestsBuffer = [];
 let logsEnabled = true; // Default to enabled
 let networkEnabled = true; // Default to enabled
 let mcpEnabled = false; // Default to disabled for MCP
-let allDomainsMode = true; // Default to all domains
+let allDomainsMode = false; // Default to specific domains only (safer)
 let specificDomains = []; // Default to empty array
+
+// Load settings from server
+const loadSettingsFromServer = async () => {
+  try {
+    const response = await fetch('http://localhost:27497/settings', {
+      method: 'GET',
+      signal: AbortSignal.timeout(3000)
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const settings = data.settings;
+      
+      logsEnabled = settings.logsEnabled !== false; // default to true
+      networkEnabled = settings.networkEnabled !== false; // default to true
+      mcpEnabled = settings.mcpEnabled === true; // default to false for MCP
+      allDomainsMode = settings.allDomainsMode === true; // default to false (safer)
+      specificDomains = settings.specificDomains || []; // default to empty array
+      
+      console.log('[Browser Relay] Settings loaded from server:', settings);
+    } else {
+      console.warn('[Browser Relay] Failed to load settings from server, using defaults');
+    }
+  } catch (error) {
+    console.warn('[Browser Relay] Error loading settings from server:', error);
+  }
+};
 
 // Generate session ID on installation
 chrome.runtime.onInstalled.addListener(async () => {
@@ -20,20 +47,8 @@ chrome.runtime.onInstalled.addListener(async () => {
     .toString(36)
     .substr(2, 9)}`;
   
-  // Load all settings from storage
-  const result = await chrome.storage.local.get([
-    'logsEnabled', 
-    'networkEnabled', 
-    'mcpEnabled',
-    'allDomainsMode', 
-    'specificDomains'
-  ]);
-  
-  logsEnabled = result.logsEnabled !== false; // default to true
-  networkEnabled = result.networkEnabled !== false; // default to true
-  mcpEnabled = result.mcpEnabled === true; // default to false for MCP
-  allDomainsMode = result.allDomainsMode !== false; // default to true
-  specificDomains = result.specificDomains || []; // default to empty array
+  // Load settings from server
+  await loadSettingsFromServer();
 });
 
 // Simple server health check - only check port 27497
@@ -46,6 +61,8 @@ const checkServer = async () => {
     
     if (response.ok) {
       console.log('[Browser Relay] Connected to server on port 27497');
+      // Load settings when server is available
+      await loadSettingsFromServer();
       return true;
     }
   } catch {
@@ -171,6 +188,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     allDomainsMode = message.allDomainsMode;
     specificDomains = message.specificDomains;
     
+    // Save to server (async)
+    fetch('http://localhost:27497/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        allDomainsMode, 
+        specificDomains 
+      }),
+      signal: AbortSignal.timeout(3000)
+    }).catch((error) => {
+      console.warn('[Browser Relay] Failed to save domain settings to server:', error);
+    });
+    
     // Notify all content scripts of the domain setting changes
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach(tab => {
@@ -187,8 +217,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
   } else if (message.type === "TOGGLE_LOGS") {
     logsEnabled = message.enabled;
-    // Store in local storage
-    chrome.storage.local.set({ logsEnabled });
+    
+    // Save to server (async)
+    fetch('http://localhost:27497/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logsEnabled }),
+      signal: AbortSignal.timeout(3000)
+    }).catch((error) => {
+      console.warn('[Browser Relay] Failed to save logs setting to server:', error);
+    });
     
     // Notify all content scripts of the state change
     chrome.tabs.query({}, (tabs) => {
@@ -205,8 +243,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
   } else if (message.type === "TOGGLE_NETWORK") {
     networkEnabled = message.enabled;
-    // Store in local storage
-    chrome.storage.local.set({ networkEnabled });
+    
+    // Save to server (async)
+    fetch('http://localhost:27497/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ networkEnabled }),
+      signal: AbortSignal.timeout(3000)
+    }).catch((error) => {
+      console.warn('[Browser Relay] Failed to save network setting to server:', error);
+    });
     
     // Notify all content scripts of the state change
     chrome.tabs.query({}, (tabs) => {
@@ -223,8 +269,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
   } else if (message.type === "TOGGLE_MCP") {
     mcpEnabled = message.enabled;
-    // Store in local storage
-    chrome.storage.local.set({ mcpEnabled });
+    
+    // Save to server (async)
+    fetch('http://localhost:27497/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mcpEnabled }),
+      signal: AbortSignal.timeout(3000)
+    }).catch((error) => {
+      console.warn('[Browser Relay] Failed to save MCP setting to server:', error);
+    });
     
     // Send MCP setting to server
     fetch('http://localhost:27497/mcp-config', {

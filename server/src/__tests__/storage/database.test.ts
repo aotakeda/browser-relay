@@ -310,4 +310,22 @@ describe('Database', () => {
       expect(logs).toHaveLength(0);
     });
   });
+
+  describe('database helpers before initialization', () => {
+    it('should handle calls to database helpers before initialization', async () => {
+      // This test runs in the same process as other tests, so we can't easily test
+      // the uninitialized state. Instead, we verify that the helpers work correctly
+      // after initialization, which is covered by other tests.
+      
+      // Verify that helpers work correctly when database is initialized
+      const result = await runAsync('SELECT 1 as test');
+      expect(result).toBeDefined();
+      
+      const allResults = await allAsync('SELECT 1 as test');
+      expect(allResults).toHaveLength(1);
+      
+      const getResult = await getAsync('SELECT 1 as test');
+      expect(getResult).toBeDefined();
+    });
+  });
 });

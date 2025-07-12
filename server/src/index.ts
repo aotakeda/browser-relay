@@ -7,7 +7,9 @@ import { formatLogEntry } from "@/utils/colorizer";
 import { logsRouter } from "@/routes/logs";
 import { networkRequestsRouter } from "@/routes/network-requests";
 import { networkConfigRouter } from "@/routes/network-config";
+import { settingsRouter } from "@/routes/settings";
 import { initializeDatabase } from "@/storage/database";
+import { initializeSettingsDatabase } from "@/storage/settings-database";
 import { setupMCPServer } from "@/mcp/server";
 
 const app = express();
@@ -61,6 +63,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use("/logs", logsRouter);
 app.use("/network-requests", networkRequestsRouter);
 app.use("/network-config", networkConfigRouter);
+app.use("/settings", settingsRouter);
 
 // Health check endpoint for Browser Relay extension port detection
 app.get("/health-browser-relay", (_req, res) => {
@@ -115,6 +118,9 @@ async function start() {
   try {
     await initializeDatabase();
     logger.info("Database initialized");
+    
+    await initializeSettingsDatabase();
+    logger.info("Settings database initialized");
 
     // Setup MCP server by default, can be disabled via UI
     if (mcpEnabled) {
@@ -135,6 +141,11 @@ async function start() {
 
 start();
 
+// Type guard for SQLite errors
+function isSQLiteError(err: Error): err is Error & { code: string } {
+  return 'code' in err && typeof (err as Record<string, unknown>).code === 'string';
+}
+
 // Graceful shutdown
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
@@ -142,20 +153,51 @@ process.on("SIGTERM", shutdown);
 async function shutdown() {
   logger.info("Shutting down gracefully...");
 
-  httpServer.close(() => {
-    logger.info("HTTP server closed");
+  // Close HTTP server first
+  await new Promise<void>((resolve) => {
+    httpServer.close(() => {
+      logger.info("HTTP server closed");
+      resolve();
+    });
   });
 
-  // Close database connection
-  const { db } = await import("@/storage/database");
-  db.close((err) => {
-    if (err) {
-      logger.error("Error closing database:", err);
-    } else {
-      logger.info("Database connection closed");
+  // Close database connections with proper error handling
+  try {
+    const { db } = await import("@/storage/database");
+    const { settingsDb } = await import("@/storage/settings-database");
+    
+    // Close main database if it exists
+    if (db) {
+      await new Promise<void>((resolve) => {
+        db.close((err) => {
+          if (err && (!isSQLiteError(err) || err.code !== 'SQLITE_MISUSE')) {
+            logger.error("Error closing database:", err);
+          } else if (!err) {
+            logger.info("Database connection closed");
+          }
+          resolve();
+        });
+      });
     }
-    process.exit(0);
-  });
+
+    // Close settings database if it exists
+    if (settingsDb) {
+      await new Promise<void>((resolve) => {
+        settingsDb.close((err) => {
+          if (err && (!isSQLiteError(err) || err.code !== 'SQLITE_MISUSE')) {
+            logger.error("Error closing settings database:", err);
+          } else if (!err) {
+            logger.info("Settings database connection closed");
+          }
+          resolve();
+        });
+      });
+    }
+  } catch (error) {
+    logger.error("Error during database cleanup:", error);
+  }
+
+  process.exit(0);
 }
 
 export { logger };

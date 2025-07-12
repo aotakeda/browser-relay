@@ -160,35 +160,13 @@ Browser Relay outputs all logs and network requests in structured JSON format fo
 
 ## MCP Integration
 
-### Using with Claude Code
-
-The MCP server allows you to access captured logs directly from Claude Code for analysis and debugging. The MCP server is enabled by default when you start the Browser Relay server and shares the same database as the main server.
-
-**Prerequisites:**
-
-1. Start the server: `npm run dev` (builds everything automatically)
-2. Ensure the Chrome extension is capturing data
-
-**Installation:**
+<details>
+<summary><strong>Using with Claude Code</strong></summary>
 
 Use the Claude Code CLI to add the MCP server:
 
 ```bash
 claude mcp add browser-relay -- npx browser-relay
-```
-
-**Alternative Installation Methods:**
-
-For project-specific configuration (shared with team):
-
-```bash
-claude mcp add browser-relay node ~/browser-relay/server/dist-mcp/mcp-standalone.js --scope project
-```
-
-For user-wide configuration (available in all projects):
-
-```bash
-claude mcp add browser-relay node ~/browser-relay/server/dist-mcp/mcp-standalone.js --scope user
 ```
 
 **Verify Installation:**
@@ -204,6 +182,41 @@ You should see `browser-relay` in the list of configured servers.
 ```bash
 claude mcp remove browser-relay
 ```
+
+</details>
+
+<details>
+<summary><strong>Using with Cursor</strong></summary>
+
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=browser-relay&config=JTdCJTIyY29tbWFuZCUyMiUzQSUyMm5weCUyMGJyb3dzZXItcmVsYXklMjIlN0Q%3D)
+
+Or, add the following to your `~/.cursor/mcp.json` file:
+
+```bash
+{
+  "mcpServers": {
+    "browser-relay": {
+      "command": "npx",
+      "args": ["browser-relay"]
+    }
+  }
+}
+
+```
+
+</details>
+
+The MCP server allows you to access captured logs directly from Claude Code or Cursor for analysis and debugging. The MCP server is enabled by default when you start the Browser Relay server and shares the same database as the main server.
+
+**Prerequisites:**
+
+1. Start the server: `npm run dev` (builds everything automatically)
+2. Ensure the Chrome extension is capturing data
+
+### How to trigger the MCP server
+
+`Check the console logs in browser-relay and fix the errors being triggered`
+`Check the network requests in browser-relay and fix the errors being triggered`
 
 ### Available MCP Tools
 

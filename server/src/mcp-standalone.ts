@@ -19,15 +19,57 @@ const __dirname = path.dirname(__filename);
 const dataDir = path.join(__dirname, '..', 'data');
 const dbPath = path.join(dataDir, 'browserrelay.db');
 
-// Ensure data directory exists
-if (!existsSync(dataDir)) {
-  mkdirSync(dataDir, { recursive: true });
-}
+// Database connection - will be initialized in initializeDatabase
+let db: sqlite3.Database;
 
-const db = new sqlite3.Database(dbPath);
-const dbRun = promisify(db.run.bind(db)) as (sql: string, params?: unknown[]) => Promise<sqlite3.RunResult>;
-const dbGet = promisify(db.get.bind(db)) as (sql: string, params?: unknown[]) => Promise<unknown>;
-const dbAll = promisify(db.all.bind(db)) as (sql: string, params?: unknown[]) => Promise<unknown[]>;
+// Database helper functions
+const dbRun = async (sql: string, params?: unknown[]): Promise<sqlite3.RunResult> => {
+  return new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error('Database not initialized. Call initializeDatabase() first.'));
+      return;
+    }
+    db.run(sql, params || [], function(this: sqlite3.RunResult, err: Error | null) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(this);
+      }
+    });
+  });
+};
+
+const dbGet = async (sql: string, params?: unknown[]): Promise<unknown> => {
+  return new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error('Database not initialized. Call initializeDatabase() first.'));
+      return;
+    }
+    db.get(sql, params || [], (err: Error | null, row: unknown) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row);
+      }
+    });
+  });
+};
+
+const dbAll = async (sql: string, params?: unknown[]): Promise<unknown[]> => {
+  return new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error('Database not initialized. Call initializeDatabase() first.'));
+      return;
+    }
+    db.all(sql, params || [], (err: Error | null, rows: unknown[]) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  });
+};
 
 // Safe JSON parsing helper
 const parseJsonSafely = (jsonString: string | null | undefined): unknown => {
@@ -116,6 +158,23 @@ const ensureResponseSize = (data: any): any => {
 
 // Initialize database
 async function initializeDatabase() {
+  // Initialize database connection if not already done
+  if (!db) {
+    // Ensure data directory exists
+    if (!existsSync(dataDir)) {
+      mkdirSync(dataDir, { recursive: true });
+    }
+    
+    // Ensure the database file can be created by touching it if it doesn't exist
+    if (!existsSync(dbPath)) {
+      const fs = await import('fs');
+      fs.writeFileSync(dbPath, '');
+    }
+    
+    // Now create the database connection
+    db = new sqlite3.Database(dbPath);
+  }
+
   await dbRun(`
     CREATE TABLE IF NOT EXISTS logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -159,71 +218,131 @@ async function initializeDatabase() {
 const tools = [
   {
     name: "get_console_logs",
-    description: "Retrieve console logs with optional filters",
+    description: "Retrieve console logs captured from web pages with optional filtering capabilities. Returns logs with timestamp, level, message, page URL, and optional stack trace information.",
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", default: 20 },
-        offset: { type: "number", default: 0 },
-        level: { type: "string", enum: ["log", "warn", "error", "info"] },
-        url: { type: "string" },
-        startTime: { type: "string" },
-        endTime: { type: "string" },
+        limit: { 
+          type: "number", 
+          default: 20, 
+          description: "Maximum number of log entries to return (1-1000). Defaults to 20 for optimal performance." 
+        },
+        offset: { 
+          type: "number", 
+          default: 0, 
+          description: "Number of log entries to skip for pagination. Use with limit to paginate through large result sets." 
+        },
+        level: { 
+          type: "string", 
+          enum: ["log", "warn", "error", "info"], 
+          description: "Filter logs by severity level. 'error' for errors, 'warn' for warnings, 'info' for informational, 'log' for general console.log statements." 
+        },
+        url: { 
+          type: "string", 
+          description: "Filter logs by page URL using partial string matching. For example, 'example.com' will match all pages containing that domain." 
+        },
+        startTime: { 
+          type: "string", 
+          description: "Filter logs after this timestamp (ISO 8601 format: YYYY-MM-DDTHH:mm:ss.sssZ). Only logs with timestamp >= startTime will be returned." 
+        },
+        endTime: { 
+          type: "string", 
+          description: "Filter logs before this timestamp (ISO 8601 format: YYYY-MM-DDTHH:mm:ss.sssZ). Only logs with timestamp <= endTime will be returned." 
+        },
       },
     },
   },
   {
     name: "clear_console_logs",
-    description: "Clear all stored console logs",
+    description: "Delete all stored console logs from the local database. This action is irreversible and will permanently remove all captured console log entries from all web pages.",
     inputSchema: {
       type: "object",
       properties: {},
+      description: "No parameters required. This tool will clear all console logs regardless of their timestamp, level, or origin page."
     },
   },
   {
     name: "search_logs",
-    description: "Search console logs by text query",
+    description: "Search console logs using text-based queries to find specific log messages or stack traces. Performs case-insensitive partial matching across log messages and stack trace content.",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Search query" },
-        limit: { type: "number", default: 20 },
+        query: { 
+          type: "string", 
+          description: "Search term to find in log messages and stack traces. Supports partial matching (e.g., 'error' matches 'TypeError', 'network error', etc.). Case-insensitive." 
+        },
+        limit: { 
+          type: "number", 
+          default: 20, 
+          description: "Maximum number of matching log entries to return (1-1000). Defaults to 20 for optimal performance." 
+        },
       },
       required: ["query"],
     },
   },
   {
     name: "get_network_requests",
-    description: "Retrieve network requests with optional filters",
+    description: "Retrieve HTTP/HTTPS network requests captured from web pages with optional filtering capabilities. Returns essential debugging information including method, URL, status code, timing, and truncated request/response bodies.",
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", default: 20 },
-        offset: { type: "number", default: 0 },
-        method: { type: "string" },
-        url: { type: "string" },
-        statusCode: { type: "number" },
-        startTime: { type: "string" },
-        endTime: { type: "string" },
+        limit: { 
+          type: "number", 
+          default: 20, 
+          description: "Maximum number of network requests to return (1-1000). Defaults to 20 for optimal performance and to avoid token limits." 
+        },
+        offset: { 
+          type: "number", 
+          default: 0, 
+          description: "Number of network requests to skip for pagination. Use with limit to paginate through large result sets." 
+        },
+        method: { 
+          type: "string", 
+          description: "Filter requests by HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS). Case-insensitive exact match." 
+        },
+        url: { 
+          type: "string", 
+          description: "Filter requests by URL using partial string matching. Matches against the full request URL including query parameters." 
+        },
+        statusCode: { 
+          type: "number", 
+          description: "Filter requests by HTTP status code (e.g., 200, 404, 500). Use exact match for specific status codes." 
+        },
+        startTime: { 
+          type: "string", 
+          description: "Filter requests after this timestamp (ISO 8601 format: YYYY-MM-DDTHH:mm:ss.sssZ). Only requests with timestamp >= startTime will be returned." 
+        },
+        endTime: { 
+          type: "string", 
+          description: "Filter requests before this timestamp (ISO 8601 format: YYYY-MM-DDTHH:mm:ss.sssZ). Only requests with timestamp <= endTime will be returned." 
+        },
       },
     },
   },
   {
     name: "clear_network_requests",
-    description: "Clear all stored network requests",
+    description: "Delete all stored network requests from the local database. This action is irreversible and will permanently remove all captured HTTP/HTTPS request data from all web pages.",
     inputSchema: {
       type: "object",
       properties: {},
+      description: "No parameters required. This tool will clear all network requests regardless of their method, status code, timestamp, or origin page."
     },
   },
   {
     name: "search_network_requests",
-    description: "Search network requests by URL, headers, or body content",
+    description: "Search network requests using text-based queries across URLs, headers, and request/response bodies. Performs case-insensitive partial matching to find specific API calls, errors, or content patterns.",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Search query to match against URL, headers, or body content" },
-        limit: { type: "number", default: 20 },
+        query: { 
+          type: "string", 
+          description: "Search term to find in request URLs, headers, request bodies, and response bodies. Supports partial matching (e.g., 'api/users' matches 'https://example.com/api/users/123'). Case-insensitive." 
+        },
+        limit: { 
+          type: "number", 
+          default: 20, 
+          description: "Maximum number of matching network requests to return (1-1000). Defaults to 20 for optimal performance and to avoid token limits." 
+        },
       },
       required: ["query"],
     },

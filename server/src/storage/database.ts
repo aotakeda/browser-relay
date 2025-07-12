@@ -1,5 +1,4 @@
 import sqlite3 from 'sqlite3';
-import { promisify } from 'util';
 
 interface RunResult {
   lastID: number;
@@ -13,24 +12,25 @@ interface CountResult {
 import path from 'path';
 import fs from 'fs';
 
-// Create data directory if it doesn't exist
-// Use __dirname to get the directory of this file, then navigate to server/data
-// This file is in server/src/storage/, so we go up 2 levels to server/ then into data/
-const dataDir = path.join(__dirname, '..', '..', 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
 // Use different database for tests
 const isTest = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID;
+
+// Create data directory if it doesn't exist (only for non-test environments)
+const dataDir = isTest ? '' : path.join(__dirname, '..', '..', 'data');
 const dbPath = isTest 
   ? ':memory:' 
   : path.join(dataDir, 'browserrelay.db');
-const db = new sqlite3.Database(dbPath);
+
+// Database connection - will be initialized in initializeDatabase
+let db: sqlite3.Database;
 
 // Custom promisify for db.run to preserve 'this' context
 const runAsync = (sql: string, params?: unknown[]): Promise<RunResult> => {
   return new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error('Database not initialized. Call initializeDatabase() first.'));
+      return;
+    }
     db.run(sql, params || [], function(this: RunResult, err: Error | null) {
       if (err) {
         reject(err);
@@ -40,11 +40,59 @@ const runAsync = (sql: string, params?: unknown[]): Promise<RunResult> => {
     });
   });
 };
-const allAsync = promisify(db.all.bind(db)) as <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<T[]>;
-const getAsync = promisify(db.get.bind(db)) as <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<T | undefined>;
+
+const allAsync = <T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]> => {
+  return new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error('Database not initialized. Call initializeDatabase() first.'));
+      return;
+    }
+    db.all(sql, params || [], (err: Error | null, rows: T[]) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  });
+};
+
+const getAsync = <T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T | undefined> => {
+  return new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error('Database not initialized. Call initializeDatabase() first.'));
+      return;
+    }
+    db.get(sql, params || [], (err: Error | null, row: T | undefined) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row);
+      }
+    });
+  });
+};
 
 export async function initializeDatabase() {
   try {
+    // Initialize database connection if not already done
+    if (!db) {
+      // Create data directory if it doesn't exist (only for non-test environments)
+      if (!isTest) {
+        if (!fs.existsSync(dataDir)) {
+          fs.mkdirSync(dataDir, { recursive: true });
+        }
+        
+        // Ensure the database file can be created by touching it if it doesn't exist
+        if (!fs.existsSync(dbPath)) {
+          fs.writeFileSync(dbPath, '');
+        }
+      }
+      
+      // Now create the database connection
+      db = new sqlite3.Database(dbPath);
+    }
+
     await runAsync(`
       CREATE TABLE IF NOT EXISTS logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
