@@ -14,10 +14,10 @@
   let sendingEnabled = false;
   let logsEnabled = true;
   let networkEnabled = true;
-  let shouldCaptureDomain = true;
-  let allDomainsMode = true; // eslint-disable-line unused-imports/no-unused-vars
+  let shouldCaptureDomain = false;
   let specificDomains = []; // eslint-disable-line unused-imports/no-unused-vars
   let networkConfig = null;
+  let settingsReceived = false;
 
   const captureStackTrace = () => {
     const stack = new Error().stack;
@@ -102,6 +102,11 @@
       logEntry.message.includes("[Network Debug]") ||
       logEntry.message.includes("browser-relay")
     ) {
+      return;
+    }
+
+    // Don't capture logs if settings haven't been received yet
+    if (!settingsReceived) {
       return;
     }
 
@@ -220,8 +225,8 @@
     logsEnabled = event.data.logsEnabled;
     networkEnabled = event.data.networkEnabled;
     shouldCaptureDomain = event.data.shouldCapture;
-    allDomainsMode = event.data.allDomainsMode;
     specificDomains = event.data.specificDomains || [];
+    settingsReceived = true; // Mark settings as received
 
     // If capture is disabled (logs or domain), clear any buffered logs
     if (!logsEnabled || !shouldCaptureDomain) {
@@ -639,6 +644,11 @@
   };
 
   const addNetworkRequest = (requestData) => {
+    // Don't capture if settings haven't been received yet
+    if (!settingsReceived) {
+      return;
+    }
+
     // Don't capture if network capture is disabled
     if (!networkEnabled) {
       return;

@@ -4,9 +4,7 @@
   const contentEl = document.getElementById("content");
   const statusEl = document.getElementById("status");
   const statusTextEl = document.getElementById("status-text");
-  const domainModeToggleEl = document.getElementById("domain-mode-toggle");
-  const specificDomainsEl = document.getElementById("specific-domains");
-  const allDomainsTextEl = document.getElementById("all-domains-text");
+  const noDomainsWarningEl = document.getElementById("no-domains-warning");
   const domainInputEl = document.getElementById("domain-input");
   const addDomainBtnEl = document.getElementById("add-domain-btn");
   const domainsListEl = document.getElementById("domains-list");
@@ -16,9 +14,11 @@
   const mcpToggleEl = document.getElementById("mcp-toggle");
   const clearLogsBtn = document.getElementById("clear-logs");
   const clearNetworkBtn = document.getElementById("clear-network");
-  
+
   // Network configuration elements
-  const networkConfigSectionEl = document.getElementById("network-config-section");
+  const networkConfigSectionEl = document.getElementById(
+    "network-config-section"
+  );
   const captureModeToggleEl = document.getElementById("capture-mode-toggle");
   const networkFiltersEl = document.getElementById("network-filters");
   const urlPatternInputEl = document.getElementById("url-pattern-input");
@@ -29,27 +29,25 @@
   const requestBodyToggleEl = document.getElementById("request-body-toggle");
   const responseBodyToggleEl = document.getElementById("response-body-toggle");
   const maxBodySizeEl = document.getElementById("max-body-size");
-  
 
   let logsEnabled = true;
   let networkEnabled = true;
   let mcpEnabled = false; // Default to false for MCP mode
   let isConnected = false;
-  let allDomainsMode = true; // true = all domains, false = specific domains
   let specificDomains = []; // array of domain strings
-  
+
   // Network configuration state
   let networkConfig = {
     enabled: true,
-    captureMode: 'all',
+    captureMode: "all",
     urlPatterns: [],
     includeHeaders: true,
     includeRequestBody: true,
     includeResponseBody: true,
     includeQueryParams: true,
     maxResponseBodySize: 50000,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
-    statusCodes: []
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+    statusCodes: [],
   };
 
   // Show loading initially
@@ -59,13 +57,13 @@
   // Load network configuration from server
   const loadNetworkConfig = async () => {
     if (!isConnected) return;
-    
+
     try {
       const response = await fetch("http://localhost:27497/network-config", {
         method: "GET",
         signal: AbortSignal.timeout(3000),
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         networkConfig = { ...networkConfig, ...data.config };
@@ -78,7 +76,7 @@
   // Save network configuration to server
   const saveNetworkConfig = async () => {
     if (!isConnected) return;
-    
+
     try {
       const response = await fetch("http://localhost:27497/network-config", {
         method: "POST",
@@ -87,11 +85,11 @@
         },
         body: JSON.stringify(networkConfig),
       });
-      
+
       if (!response.ok) {
         throw new Error(`Server responded with ${response.status}`);
       }
-      
+
       // Update local config with server response
       const data = await response.json();
       if (data.config) {
@@ -107,20 +105,42 @@
   // Load current state
   const loadState = async () => {
     try {
-      // Get current enabled states and domain configuration from storage
-      const result = await chrome.storage.local.get([
-        "logsEnabled",
-        "networkEnabled",
-        "mcpEnabled",
-        "allDomainsMode",
-        "specificDomains",
-      ]);
+      // Get current enabled states and domain configuration from server
+      try {
+        const response = await fetch("http://localhost:27497/settings", {
+          method: "GET",
+          signal: AbortSignal.timeout(3000),
+        });
 
-      logsEnabled = result.logsEnabled !== false; // default to true
-      networkEnabled = result.networkEnabled !== false; // default to true
-      mcpEnabled = result.mcpEnabled === true; // default to false for MCP
-      allDomainsMode = result.allDomainsMode !== false; // default to true
-      specificDomains = result.specificDomains || []; // default to empty array
+        if (response.ok) {
+          const data = await response.json();
+          const settings = data.settings;
+
+          logsEnabled = settings.logsEnabled !== false; // default to true
+          networkEnabled = settings.networkEnabled !== false; // default to true
+          mcpEnabled = settings.mcpEnabled === true; // default to false for MCP
+          specificDomains = settings.specificDomains || []; // default to empty array
+        } else {
+          console.warn(
+            "[Browser Relay] Failed to load settings from server, using defaults"
+          );
+          // Use default values
+          logsEnabled = true;
+          networkEnabled = true;
+          mcpEnabled = false;
+          specificDomains = [];
+        }
+      } catch (error) {
+        console.warn(
+          "[Browser Relay] Error loading settings from server:",
+          error
+        );
+        // Use default values
+        logsEnabled = true;
+        networkEnabled = true;
+        mcpEnabled = false;
+        specificDomains = [];
+      }
 
       // Check server connection
       try {
@@ -132,7 +152,7 @@
           }
         );
         isConnected = response.ok;
-        
+
         if (isConnected) {
           await loadNetworkConfig();
         }
@@ -149,15 +169,26 @@
 
   // Domain management functions
   const saveDomainSettings = async () => {
-    await chrome.storage.local.set({
-      allDomainsMode,
-      specificDomains,
-    });
+    try {
+      // Save to server
+      await fetch("http://localhost:27497/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          specificDomains,
+        }),
+        signal: AbortSignal.timeout(3000),
+      });
+    } catch (error) {
+      console.warn(
+        "[Browser Relay] Failed to save domain settings to server:",
+        error
+      );
+    }
 
     // Notify background script of domain changes
     await chrome.runtime.sendMessage({
       type: "DOMAIN_SETTINGS_CHANGED",
-      allDomainsMode,
       specificDomains,
     });
   };
@@ -168,32 +199,34 @@
 
     // Normalize the input - extract hostname/domain from URL or use as-is
     let domain = input.toLowerCase();
-    
+
     // If input looks like a URL, extract the hostname
-    if (input.startsWith('http://') || input.startsWith('https://')) {
+    if (input.startsWith("http://") || input.startsWith("https://")) {
       try {
         const url = new URL(input);
-        domain = url.hostname + (url.port ? ':' + url.port : '');
+        domain = url.hostname + (url.port ? ":" + url.port : "");
       } catch {
         showDomainError("Invalid URL format");
         return;
       }
     }
-    
+
     // Domain validation - allow localhost, IP addresses, and regular domains
     const isValidDomain = (domain) => {
       // Allow localhost (with or without port)
-      if (domain.startsWith('localhost')) {
+      if (domain.startsWith("localhost")) {
         return /^localhost(:[0-9]+)?$/.test(domain);
       }
-      
+
       // Allow IP addresses (with or without port)
       if (/^[0-9]/.test(domain)) {
         return /^([0-9]{1,3}\.){3}[0-9]{1,3}(:[0-9]+)?$/.test(domain);
       }
-      
+
       // Allow regular domains (with or without port)
-      return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*?(:[0-9]+)?$/.test(domain);
+      return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*?(:[0-9]+)?$/.test(
+        domain
+      );
     };
 
     if (!isValidDomain(domain)) {
@@ -245,80 +278,55 @@
   };
 
   const removeUrlPattern = async (pattern) => {
-    networkConfig.urlPatterns = networkConfig.urlPatterns.filter((p) => p !== pattern);
+    networkConfig.urlPatterns = networkConfig.urlPatterns.filter(
+      (p) => p !== pattern
+    );
     await saveNetworkConfig();
   };
 
   const toggleCaptureMode = async () => {
-    const isFiltered = networkConfig.captureMode !== 'all';
-    networkConfig.captureMode = isFiltered ? 'all' : 'include';
+    const isFiltered = networkConfig.captureMode !== "all";
+    networkConfig.captureMode = isFiltered ? "all" : "include";
     await saveNetworkConfig();
   };
 
   const toggleFilterMode = async () => {
-    networkConfig.captureMode = networkConfig.captureMode === 'include' ? 'exclude' : 'include';
+    networkConfig.captureMode =
+      networkConfig.captureMode === "include" ? "exclude" : "include";
     await saveNetworkConfig();
-  };
-
-
-  const toggleDomainMode = async () => {
-    allDomainsMode = !allDomainsMode;
-    await saveDomainSettings();
-    updateDomainsDisplay();
   };
 
   // Update domains display
   const updateDomainsDisplay = () => {
-    // Update mode toggle
-    domainModeToggleEl.className = "toggle-small";
-    if (!allDomainsMode) {
-      domainModeToggleEl.classList.add("enabled");
-    }
-    domainModeToggleEl.setAttribute(
-      "aria-checked",
-      (!allDomainsMode).toString()
-    );
-
-    // Update toggle labels
-    const labels = document.querySelectorAll(".toggle-label-small");
-    labels[0].className = allDomainsMode
-      ? "toggle-label-small active"
-      : "toggle-label-small";
-    labels[1].className = !allDomainsMode
-      ? "toggle-label-small active"
-      : "toggle-label-small";
-
-    // Show/hide appropriate sections
-    if (allDomainsMode) {
-      specificDomainsEl.style.display = "none";
-      allDomainsTextEl.style.display = "block";
+    // Show warning if no domains are specified
+    if (specificDomains.length === 0) {
+      noDomainsWarningEl.style.display = "block";
     } else {
-      specificDomainsEl.style.display = "block";
-      allDomainsTextEl.style.display = "none";
-
-      // Update domains list
-      domainsListEl.innerHTML = specificDomains
-        .map(
-          (domain) => `
-          <div class="domain-tag">
-            ${domain}
-            <span class="domain-remove" data-domain="${domain}">×</span>
-          </div>
-        `
-        )
-        .join("");
+      noDomainsWarningEl.style.display = "none";
     }
+
+    // Update domains list
+    domainsListEl.innerHTML = specificDomains
+      .map(
+        (domain) => `
+        <div class="domain-tag">
+          ${domain}
+          <span class="domain-remove" data-domain="${domain}">×</span>
+        </div>
+      `
+      )
+      .join("");
   };
 
   // Update network configuration display
   const updateNetworkConfigDisplay = () => {
     // Show/hide network config section based on network enabled state
     networkConfigSectionEl.style.display = networkEnabled ? "block" : "none";
-    
+
     if (!networkEnabled) return;
 
     // Update capture mode toggle (All vs Filtered)
-    const isFiltered = networkConfig.captureMode !== 'all';
+    const isFiltered = networkConfig.captureMode !== "all";
     captureModeToggleEl.className = "toggle toggle-small";
     if (isFiltered) {
       captureModeToggleEl.classList.add("enabled");
@@ -330,7 +338,7 @@
 
     if (isFiltered) {
       // Update filter mode toggle (Include vs Exclude)
-      const isExclude = networkConfig.captureMode === 'exclude';
+      const isExclude = networkConfig.captureMode === "exclude";
       filterModeToggleEl.className = "toggle toggle-small";
       if (isExclude) {
         filterModeToggleEl.classList.add("enabled");
@@ -355,19 +363,28 @@
     if (networkConfig.includeHeaders) {
       headersToggleEl.classList.add("enabled");
     }
-    headersToggleEl.setAttribute("aria-checked", networkConfig.includeHeaders.toString());
+    headersToggleEl.setAttribute(
+      "aria-checked",
+      networkConfig.includeHeaders.toString()
+    );
 
     requestBodyToggleEl.className = "toggle";
     if (networkConfig.includeRequestBody) {
       requestBodyToggleEl.classList.add("enabled");
     }
-    requestBodyToggleEl.setAttribute("aria-checked", networkConfig.includeRequestBody.toString());
+    requestBodyToggleEl.setAttribute(
+      "aria-checked",
+      networkConfig.includeRequestBody.toString()
+    );
 
     responseBodyToggleEl.className = "toggle";
     if (networkConfig.includeResponseBody) {
       responseBodyToggleEl.classList.add("enabled");
     }
-    responseBodyToggleEl.setAttribute("aria-checked", networkConfig.includeResponseBody.toString());
+    responseBodyToggleEl.setAttribute(
+      "aria-checked",
+      networkConfig.includeResponseBody.toString()
+    );
 
     // Update max body size (convert from bytes to thousands)
     maxBodySizeEl.value = Math.round(networkConfig.maxResponseBodySize / 1000);
@@ -381,7 +398,7 @@
 
     // Update domains display
     updateDomainsDisplay();
-    
+
     // Update network configuration display
     updateNetworkConfigDisplay();
 
@@ -435,7 +452,7 @@
     networkToggleEl.style.cursor = toggleCursor;
     mcpToggleEl.style.opacity = toggleOpacity;
     mcpToggleEl.style.cursor = toggleCursor;
-    
+
     // Disable network config toggles if not connected
     if (headersToggleEl) {
       headersToggleEl.style.opacity = toggleOpacity;
@@ -470,8 +487,20 @@
     try {
       logsEnabled = !logsEnabled;
 
-      // Save to storage
-      await chrome.storage.local.set({ logsEnabled });
+      // Save to server
+      try {
+        await fetch("http://localhost:27497/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ logsEnabled }),
+          signal: AbortSignal.timeout(3000),
+        });
+      } catch (error) {
+        console.warn(
+          "[Browser Relay] Failed to save logs setting to server:",
+          error
+        );
+      }
 
       // Notify background script
       await chrome.runtime.sendMessage({
@@ -495,8 +524,20 @@
     try {
       networkEnabled = !networkEnabled;
 
-      // Save to storage
-      await chrome.storage.local.set({ networkEnabled });
+      // Save to server
+      try {
+        await fetch("http://localhost:27497/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ networkEnabled }),
+          signal: AbortSignal.timeout(3000),
+        });
+      } catch (error) {
+        console.warn(
+          "[Browser Relay] Failed to save network setting to server:",
+          error
+        );
+      }
 
       // Notify background script
       await chrome.runtime.sendMessage({
@@ -520,8 +561,20 @@
     try {
       mcpEnabled = !mcpEnabled;
 
-      // Save to storage
-      await chrome.storage.local.set({ mcpEnabled });
+      // Save to server
+      try {
+        await fetch("http://localhost:27497/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mcpEnabled }),
+          signal: AbortSignal.timeout(3000),
+        });
+      } catch (error) {
+        console.warn(
+          "[Browser Relay] Failed to save MCP setting to server:",
+          error
+        );
+      }
 
       // Notify background script to inform server
       await chrome.runtime.sendMessage({
@@ -635,13 +688,6 @@
   clearNetworkBtn.addEventListener("click", clearNetwork);
 
   // Domain management event listeners
-  domainModeToggleEl.addEventListener("click", toggleDomainMode);
-  domainModeToggleEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      toggleDomainMode();
-    }
-  });
 
   addDomainBtnEl.addEventListener("click", addDomain);
 
@@ -701,7 +747,6 @@
     }
   });
 
-
   // Network option toggles
   const toggleNetworkOption = (option) => async () => {
     if (!isConnected) return;
@@ -709,27 +754,36 @@
     await saveNetworkConfig();
   };
 
-  headersToggleEl.addEventListener("click", toggleNetworkOption('includeHeaders'));
+  headersToggleEl.addEventListener(
+    "click",
+    toggleNetworkOption("includeHeaders")
+  );
   headersToggleEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      toggleNetworkOption('includeHeaders')();
+      toggleNetworkOption("includeHeaders")();
     }
   });
 
-  requestBodyToggleEl.addEventListener("click", toggleNetworkOption('includeRequestBody'));
+  requestBodyToggleEl.addEventListener(
+    "click",
+    toggleNetworkOption("includeRequestBody")
+  );
   requestBodyToggleEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      toggleNetworkOption('includeRequestBody')();
+      toggleNetworkOption("includeRequestBody")();
     }
   });
 
-  responseBodyToggleEl.addEventListener("click", toggleNetworkOption('includeResponseBody'));
+  responseBodyToggleEl.addEventListener(
+    "click",
+    toggleNetworkOption("includeResponseBody")
+  );
   responseBodyToggleEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      toggleNetworkOption('includeResponseBody')();
+      toggleNetworkOption("includeResponseBody")();
     }
   });
 
@@ -742,7 +796,9 @@
       await saveNetworkConfig();
     } else {
       // Reset to current value if invalid
-      maxBodySizeEl.value = Math.round(networkConfig.maxResponseBodySize / 1000);
+      maxBodySizeEl.value = Math.round(
+        networkConfig.maxResponseBodySize / 1000
+      );
     }
   });
 

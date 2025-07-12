@@ -155,7 +155,7 @@ async function main() {
     const server = new Server(
       {
         name: "browser-relay",
-        version: "0.1.0",
+        version: "0.1.4",
       },
       {
         capabilities: {

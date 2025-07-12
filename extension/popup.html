@@ -579,25 +579,7 @@
           <span class="domains-title">Domains being watched</span>
         </div>
 
-        <div class="domain-mode-toggle">
-          <div class="toggle-container toggle-container-small">
-            <span class="toggle-label-small">All Domains</span>
-            <div
-              id="domain-mode-toggle"
-              class="toggle toggle-small"
-              role="switch"
-              aria-checked="true"
-              tabindex="0"
-            ></div>
-            <span class="toggle-label-small">Specific Domains</span>
-          </div>
-        </div>
-
-        <div
-          id="specific-domains"
-          class="specific-domains"
-          style="display: none"
-        >
+        <div id="specific-domains" class="specific-domains">
           <div class="domain-input-container">
             <input
               type="text"
@@ -607,12 +589,22 @@
             />
             <button id="add-domain-btn" class="add-domain-btn">+</button>
           </div>
-          <div id="domain-error" class="domain-error" style="display: none;"></div>
+          <div
+            id="domain-error"
+            class="domain-error"
+            style="display: none"
+          ></div>
           <div id="domains-list" class="domains-list"></div>
         </div>
 
-        <div id="all-domains-text" class="domains-content">
-          <span class="domains-all">Capturing from all domains</span>
+        <div
+          id="no-domains-warning"
+          class="domains-content"
+          style="display: none"
+        >
+          <span style="color: #ff8080; font-weight: 600"
+            >⚠️ No domains specified - nothing will be captured!</span
+          >
         </div>
       </div>
 
@@ -772,7 +764,6 @@
             tabindex="0"
           ></div>
         </div>
-
 
         <div class="button-group">
           <button id="clear-logs" class="button danger">

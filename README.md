@@ -42,14 +42,15 @@ The server will start on `http://localhost:27497` (fixed port, not configurable)
 2. Enable "Developer mode" (toggle in top right)
 3. Click "Load unpacked"
 4. Select the `extension` directory from this project
-5. The extension will now capture console logs from all websites
+5. Configure domains in the extension popup to start capturing (no domains are captured by default)
 
 ### 4. Test the Setup
 
-1. Visit any website
-2. Open browser console (F12)
-3. Type: `console.log("Hello from Browser Relay!")`
-4. Check server logs or use MCP tools to see captured logs
+1. Click the Browser Relay extension icon and add a domain (e.g., `localhost:3000`)
+2. Visit that domain
+3. Open browser console (F12)
+4. Type: `console.log("Hello from Browser Relay!")`
+5. Check server logs, use MCP tools to see captured logs or hit the API endpoints to see the data
 
 ## HTTP API Endpoints
 
@@ -71,7 +72,23 @@ The server will start on `http://localhost:27497` (fixed port, not configurable)
 ### System
 
 - `GET /health` - Server health check
-- `GET /allowed-domains` - Check domain filtering configuration
+- `GET /health-browser-relay` - Special health check for extension port detection
+- `GET /config` - Get server configuration for extension
+- `POST /mcp-config` - Update MCP server configuration
+
+### Settings
+
+- `GET /settings` - Retrieve extension settings
+- `POST /settings` - Update extension settings
+- `DELETE /settings` - Reset settings to defaults
+- `GET /settings/:key` - Get specific setting value
+- `PUT /settings/:key` - Update specific setting value
+
+### Network Configuration
+
+- `GET /network-config` - Get network capture configuration
+- `POST /network-config` - Update network capture configuration
+- `POST /network-config/reset` - Reset network config to defaults
 
 ### API Examples
 
@@ -87,6 +104,14 @@ curl "http://localhost:27497/network-requests?limit=10"       # Recent requests
 curl "http://localhost:27497/network-requests?method=POST"    # POST requests only
 curl "http://localhost:27497/network-requests?status=404"     # Failed requests
 curl -X DELETE "http://localhost:27497/network-requests"      # Clear all requests
+
+# Settings
+curl "http://localhost:27497/settings"                       # Get all settings
+curl -X POST "http://localhost:27497/settings" \             # Update settings
+  -H "Content-Type: application/json" \
+  -d '{"specificDomains": ["localhost:3000"]}'
+curl "http://localhost:27497/settings/specificDomains"       # Get specific setting
+curl -X DELETE "http://localhost:27497/settings"             # Reset to defaults
 ```
 
 ## JSON Output Format
@@ -160,35 +185,13 @@ Browser Relay outputs all logs and network requests in structured JSON format fo
 
 ## MCP Integration
 
-### Using with Claude Code
-
-The MCP server allows you to access captured logs directly from Claude Code for analysis and debugging. The MCP server is enabled by default when you start the Browser Relay server and shares the same database as the main server.
-
-**Prerequisites:**
-
-1. Start the server: `npm run dev` (builds everything automatically)
-2. Ensure the Chrome extension is capturing data
-
-**Installation:**
+<details>
+<summary><strong>Using with Claude Code</strong></summary>
 
 Use the Claude Code CLI to add the MCP server:
 
 ```bash
 claude mcp add browser-relay -- npx browser-relay
-```
-
-**Alternative Installation Methods:**
-
-For project-specific configuration (shared with team):
-
-```bash
-claude mcp add browser-relay node ~/browser-relay/server/dist-mcp/mcp-standalone.js --scope project
-```
-
-For user-wide configuration (available in all projects):
-
-```bash
-claude mcp add browser-relay node ~/browser-relay/server/dist-mcp/mcp-standalone.js --scope user
 ```
 
 **Verify Installation:**
@@ -204,6 +207,41 @@ You should see `browser-relay` in the list of configured servers.
 ```bash
 claude mcp remove browser-relay
 ```
+
+</details>
+
+<details>
+<summary><strong>Using with Cursor</strong></summary>
+
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=browser-relay&config=JTdCJTIyY29tbWFuZCUyMiUzQSUyMm5weCUyMGJyb3dzZXItcmVsYXklMjIlN0Q%3D)
+
+Or, add the following to your `~/.cursor/mcp.json` file:
+
+```bash
+{
+  "mcpServers": {
+    "browser-relay": {
+      "command": "npx",
+      "args": ["browser-relay"]
+    }
+  }
+}
+
+```
+
+</details>
+
+The MCP server allows you to access captured logs directly from Claude Code or Cursor for analysis and debugging. The MCP server is enabled by default when you start the Browser Relay server and shares the same database as the main server.
+
+**Prerequisites:**
+
+1. Start the server: `npm run dev` (builds everything automatically)
+2. Ensure the Chrome extension is capturing data
+
+### How to trigger the MCP server
+
+`Check the console logs in browser-relay and fix the errors being triggered`
+`Check the network requests in browser-relay and fix the errors being triggered`
 
 ### Available MCP Tools
 
@@ -293,36 +331,69 @@ browser-relay/
 ├── server/                    # HTTP/MCP Server
 │   ├── src/                  # TypeScript source code
 │   │   ├── index.ts          # Main server entry point
+│   │   ├── mcp-standalone.ts # MCP standalone entry
+│   │   ├── mcp.ts           # MCP server setup
+│   │   ├── types.ts         # TypeScript type definitions
+│   │   ├── __tests__/       # Server test files
 │   │   ├── mcp/             # MCP server implementation
+│   │   │   └── server.ts
 │   │   ├── routes/          # Express.js routes
 │   │   │   ├── logs.ts      # Console log endpoints
-│   │   │   └── network-requests.ts # Network request endpoints
+│   │   │   ├── network-requests.ts # Network request endpoints
+│   │   │   ├── network-config.ts # Network configuration endpoints
+│   │   │   ├── settings.ts  # Settings management endpoints
+│   │   │   └── __tests__/   # Route test files
 │   │   ├── storage/         # Database and storage logic
 │   │   │   ├── database.ts  # SQLite setup
 │   │   │   ├── LogStorage.ts # Console log storage
-│   │   │   └── NetworkStorage.ts # Network request storage
-│   │   └── types.ts         # TypeScript type definitions
-│   ├── dist/               # Compiled JavaScript
+│   │   │   ├── NetworkStorage.ts # Network request storage
+│   │   │   ├── SettingsStorage.ts # Settings storage
+│   │   │   ├── settings-database.ts # Settings database
+│   │   │   └── __tests__/   # Storage test files
+│   │   ├── services/        # Service layer
+│   │   └── utils/           # Utility functions
+│   │       ├── colorizer.ts # Log colorization
+│   │       └── logger.ts    # Logging utilities
+│   ├── dist/               # Compiled JavaScript (HTTP server)
+│   ├── dist-mcp/           # Compiled JavaScript (MCP server)
 │   ├── data/               # SQLite database files
+│   │   ├── browserrelay.db # Main database
+│   │   └── browserrelay-settings.db # Settings database
 │   ├── package.json        # Server dependencies
-│   └── tsconfig.json       # TypeScript configuration
+│   ├── package.mcp.json    # MCP package configuration
+│   ├── tsconfig.json       # TypeScript configuration
+│   ├── tsconfig.mcp.json   # MCP TypeScript configuration
+│   └── jest.config.js      # Jest test configuration
 ├── extension/              # Chrome Extension
 │   ├── manifest.json       # Extension manifest (v3)
 │   ├── inject.js          # Console log capture (MAIN world)
 │   ├── content.js         # Message relay (ISOLATED world)
 │   ├── background.js      # Service worker + network capture
-│   └── icons/             # Extension icons
+│   ├── popup.html         # Extension popup UI
+│   ├── popup.js           # Extension popup logic
+│   ├── icons/             # Extension icons
+│   ├── package.json       # Extension dependencies
+│   ├── jest.config.js     # Jest test configuration
+│   ├── jest.setup.js      # Jest test setup
+│   └── tests/             # Extension test files
+│       ├── domain-filtering.test.js
+│       └── race-condition.test.js
 ├── package.json            # Root workspace configuration
+├── CLAUDE.md               # Project instructions for AI assistants
+├── eslint.config.js        # ESLint configuration
 └── README.md               # This file
 ```
 
 ### Key Components
 
-- `extension/`: Chrome extension with background service worker and dual content scripts
+- `extension/`: Chrome extension with background service worker, dual content scripts, and popup UI
 - `server/`: Node.js/Express server with MCP integration and SQLite storage
-- `server/src/storage/`: Database layer with LogStorage class and schema management
+- `server/src/storage/`: Database layer with LogStorage, NetworkStorage, and SettingsStorage classes
 - `server/src/mcp/`: MCP server implementation for AI assistant access
-- `server/src/routes/`: HTTP API endpoints for log retrieval and filtering
+- `server/src/routes/`: HTTP API endpoints for logs, network requests, settings, and configuration
+- `server/src/services/`: Service layer for business logic
+- `server/src/utils/`: Utility functions for logging and colorization
+- `extension/popup.*`: Extension popup interface for configuration and data management
 
 ### Development Commands
 
@@ -333,9 +404,6 @@ npm install
 # Development mode (builds everything automatically, watches files)
 npm run dev
 
-# Production mode (builds everything automatically)
-npm start
-
 # Build everything manually
 npm run build
 
@@ -345,9 +413,6 @@ npm run build:mcp
 # Build both HTTP and MCP servers
 npm run build:all
 
-# Run all tests
-npm test
-
 # Run linting
 npm run lint
 
@@ -355,6 +420,21 @@ npm run lint
 npm run test:server     # Run server tests only
 npm run dev:server      # Start server in development mode
 npm run build:server    # Build server only
+
+
+# Run all tests
+npm test
+
+# Extension-specific commands
+npm run test:extension  # Run extension tests only
+
+# Specialized test commands
+npm run test:settings           # Settings-specific tests
+npm run test:domain-filtering   # Domain filtering tests
+npm run test:race-condition     # Race condition tests
+
+# Linting with auto-fix
+npm run lint:fix        # Auto-fix linting issues
 ```
 
 ### UI Configuration
@@ -363,10 +443,10 @@ All Browser Relay settings are managed through the extension popup interface:
 
 #### Domain Configuration
 
-- **All Domains Mode**: Captures from all websites (default)
-- **Specific Domains Mode**: Only captures from domains you specify
+- **Specific Domains Only**: Captures only from domains you explicitly specify in the extension popup
 - **Add/Remove Domains**: Use the extension popup to manage your domain list
 - **Subdomain Support**: Specified domains automatically include subdomains (e.g., `github.com` includes `gist.github.com`)
+- **Default Behavior**: No domains are captured by default - you must explicitly add domains to start capturing
 
 #### Capture Controls
 
@@ -436,11 +516,11 @@ All settings are saved automatically and persist across browser sessions. No ser
 
 4. **Domain filtering issues**
    - Open the Browser Relay extension popup
-   - Check the "Capture Scope" section to see your current configuration
-   - If using "Specific Domains" mode, verify the current domain is in your list
+   - Check your configured domains list to see your current configuration
+   - Verify the current domain is in your explicitly configured domains list
    - Add domains using the input field in the popup
    - Subdomains are automatically included (e.g., `github.com` includes `gist.github.com`)
-   - Switch to "All Domains" mode if you want to capture from all websites
+   - Note: The extension only captures from explicitly listed domains - no "All Domains" mode exists
 
 ### MCP Server Issues
 
@@ -472,7 +552,7 @@ All settings are saved automatically and persist across browser sessions. No ser
    ```
 
 3. **Database issues**
-   - Server uses persistent SQLite database in `server/data/browserrelay.db`
+   - Server uses persistent SQLite database in `server/data/browserrelay.db` and `server/data/browserrelay-settings.db` (both are ignored by git)
    - Check server logs for database initialization errors
    - Use `DELETE /logs` endpoint to clear logs without restarting
 
