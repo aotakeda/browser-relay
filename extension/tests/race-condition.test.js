@@ -7,15 +7,15 @@ global.chrome = {
   runtime: {
     sendMessage: jest.fn(),
     onMessage: {
-      addListener: jest.fn()
-    }
-  }
+      addListener: jest.fn(),
+    },
+  },
 };
 
 // Mock window.postMessage
 global.window.postMessage = jest.fn();
 
-describe('Race Condition Fixes', () => {
+describe("Race Condition Fixes", () => {
   let mockInjectScript;
   let mockAddLog;
   let mockAddNetworkRequest;
@@ -23,15 +23,15 @@ describe('Race Condition Fixes', () => {
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
-    
+
     // Mock inject script state
     mockInjectScript = {
       shouldCaptureDomain: false, // Fixed: defaults to false
-      settingsReceived: false,    // Fixed: added settings flag
+      settingsReceived: false, // Fixed: added settings flag
       logsEnabled: true,
       networkEnabled: true,
       logBuffer: [],
-      networkBuffer: []
+      networkBuffer: [],
     };
 
     // Mock the addLog function from inject.js
@@ -42,7 +42,10 @@ describe('Race Condition Fixes', () => {
       }
 
       // Don't capture logs if log capture is disabled or domain not allowed
-      if (!mockInjectScript.logsEnabled || !mockInjectScript.shouldCaptureDomain) {
+      if (
+        !mockInjectScript.logsEnabled ||
+        !mockInjectScript.shouldCaptureDomain
+      ) {
         return;
       }
 
@@ -70,20 +73,20 @@ describe('Race Condition Fixes', () => {
     });
   });
 
-  describe('Initial State Safety', () => {
-    it('should default shouldCaptureDomain to false', () => {
+  describe("Initial State Safety", () => {
+    it("should default shouldCaptureDomain to false", () => {
       expect(mockInjectScript.shouldCaptureDomain).toBe(false);
     });
 
-    it('should default settingsReceived to false', () => {
+    it("should default settingsReceived to false", () => {
       expect(mockInjectScript.settingsReceived).toBe(false);
     });
 
-    it('should not capture logs before settings are received', () => {
+    it("should not capture logs before settings are received", () => {
       const logEntry = {
         timestamp: new Date().toISOString(),
-        level: 'info',
-        message: 'Test log message'
+        level: "info",
+        message: "Test log message",
       };
 
       mockAddLog(logEntry);
@@ -91,11 +94,11 @@ describe('Race Condition Fixes', () => {
       expect(mockInjectScript.logBuffer).toHaveLength(0);
     });
 
-    it('should not capture network requests before settings are received', () => {
+    it("should not capture network requests before settings are received", () => {
       const networkRequest = {
-        url: 'https://api.example.com/data',
-        method: 'GET',
-        timestamp: new Date().toISOString()
+        url: "https://api.example.com/data",
+        method: "GET",
+        timestamp: new Date().toISOString(),
       };
 
       mockAddNetworkRequest(networkRequest);
@@ -104,16 +107,16 @@ describe('Race Condition Fixes', () => {
     });
   });
 
-  describe('Settings Reception', () => {
-    it('should start capturing after settings are received and domain is allowed', () => {
+  describe("Settings Reception", () => {
+    it("should start capturing after settings are received and domain is allowed", () => {
       // Simulate receiving settings
       mockInjectScript.settingsReceived = true;
       mockInjectScript.shouldCaptureDomain = true;
 
       const logEntry = {
         timestamp: new Date().toISOString(),
-        level: 'info',
-        message: 'Test log message'
+        level: "info",
+        message: "Test log message",
       };
 
       mockAddLog(logEntry);
@@ -122,15 +125,15 @@ describe('Race Condition Fixes', () => {
       expect(mockInjectScript.logBuffer[0]).toEqual(logEntry);
     });
 
-    it('should not capture when settings received but domain not allowed', () => {
+    it("should not capture when settings received but domain not allowed", () => {
       // Simulate receiving settings with domain not allowed
       mockInjectScript.settingsReceived = true;
       mockInjectScript.shouldCaptureDomain = false;
 
       const logEntry = {
         timestamp: new Date().toISOString(),
-        level: 'info',
-        message: 'Test log message'
+        level: "info",
+        message: "Test log message",
       };
 
       mockAddLog(logEntry);
@@ -139,38 +142,46 @@ describe('Race Condition Fixes', () => {
     });
   });
 
-  describe('Background Script Default Behavior', () => {
-    it('should default to safer allDomainsMode = false', () => {
+  describe("Background Script Default Behavior", () => {
+    it("should default to safer allDomainsMode = false", () => {
       // This simulates the fixed background script behavior
       const backgroundScriptDefaults = {
         allDomainsMode: false, // Fixed: changed from true to false
-        specificDomains: []
+        specificDomains: [],
       };
 
       expect(backgroundScriptDefaults.allDomainsMode).toBe(false);
     });
 
-    it('should require explicit true for allDomainsMode setting', () => {
+    it("should require explicit true for allDomainsMode setting", () => {
       // Simulate settings parsing logic from background.js
       const parseSettings = (settings) => {
         return {
           allDomainsMode: settings.allDomainsMode === true, // Fixed: explicit true check
-          specificDomains: settings.specificDomains || []
+          specificDomains: settings.specificDomains || [],
         };
       };
 
       // Test various values
       expect(parseSettings({ allDomainsMode: true }).allDomainsMode).toBe(true);
-      expect(parseSettings({ allDomainsMode: false }).allDomainsMode).toBe(false);
-      expect(parseSettings({ allDomainsMode: undefined }).allDomainsMode).toBe(false);
-      expect(parseSettings({ allDomainsMode: null }).allDomainsMode).toBe(false);
-      expect(parseSettings({ allDomainsMode: 'true' }).allDomainsMode).toBe(false);
+      expect(parseSettings({ allDomainsMode: false }).allDomainsMode).toBe(
+        false
+      );
+      expect(parseSettings({ allDomainsMode: undefined }).allDomainsMode).toBe(
+        false
+      );
+      expect(parseSettings({ allDomainsMode: null }).allDomainsMode).toBe(
+        false
+      );
+      expect(parseSettings({ allDomainsMode: "true" }).allDomainsMode).toBe(
+        false
+      );
       expect(parseSettings({}).allDomainsMode).toBe(false);
     });
   });
 
-  describe('New Tab Scenarios', () => {
-    it('should handle new tab opening with no settings', () => {
+  describe("New Tab Scenarios", () => {
+    it("should handle new tab opening with no settings", () => {
       // Simulate a new tab opening - inject script loads first
       const newTabState = {
         shouldCaptureDomain: false,
@@ -178,14 +189,7 @@ describe('Race Condition Fixes', () => {
         logsEnabled: true,
         networkEnabled: true,
         logBuffer: [],
-        networkBuffer: []
-      };
-
-      // Try to capture a log immediately (before content script loads)
-      const logEntry = {
-        timestamp: new Date().toISOString(),
-        level: 'info',
-        message: 'Early log message'
+        networkBuffer: [],
       };
 
       // Simulate the addLog function behavior
@@ -195,7 +199,7 @@ describe('Race Condition Fixes', () => {
       }
     });
 
-    it('should handle content script loading and sending settings', () => {
+    it("should handle content script loading and sending settings", () => {
       // Start with new tab state
       mockInjectScript.settingsReceived = false;
       mockInjectScript.shouldCaptureDomain = false;
@@ -205,19 +209,20 @@ describe('Race Condition Fixes', () => {
         logsEnabled: true,
         networkEnabled: true,
         allDomainsMode: false,
-        specificDomains: ['localhost:4321'],
-        shouldCapture: true // Content script calculated this
+        specificDomains: ["localhost:4321"],
+        shouldCapture: true, // Content script calculated this
       };
 
       // Simulate settings message being sent to inject script
       mockInjectScript.settingsReceived = true;
-      mockInjectScript.shouldCaptureDomain = settingsFromBackground.shouldCapture;
+      mockInjectScript.shouldCaptureDomain =
+        settingsFromBackground.shouldCapture;
 
       // Now logs should be captured
       const logEntry = {
         timestamp: new Date().toISOString(),
-        level: 'info',
-        message: 'Post-settings log message'
+        level: "info",
+        message: "Post-settings log message",
       };
 
       mockAddLog(logEntry);
@@ -225,22 +230,14 @@ describe('Race Condition Fixes', () => {
       expect(mockInjectScript.logBuffer).toHaveLength(1);
     });
 
-    it('should handle failed settings loading gracefully', () => {
-      // Simulate settings loading failure - background script uses safe defaults
-      const fallbackSettings = {
-        logsEnabled: true,
-        networkEnabled: true,
-        allDomainsMode: false, // Safe default
-        specificDomains: [] // Empty array
-      };
-
+    it("should handle failed settings loading gracefully", () => {
       mockInjectScript.settingsReceived = true;
       mockInjectScript.shouldCaptureDomain = false; // No domains allowed
 
       const logEntry = {
         timestamp: new Date().toISOString(),
-        level: 'info',
-        message: 'Test log message'
+        level: "info",
+        message: "Test log message",
       };
 
       mockAddLog(logEntry);
@@ -250,11 +247,8 @@ describe('Race Condition Fixes', () => {
     });
   });
 
-  describe('Race Condition Prevention', () => {
-    it('should prevent logs from being captured during the race window', () => {
-      // Simulate the race condition scenario
-      const raceConditionLogs = [];
-
+  describe("Race Condition Prevention", () => {
+    it("should prevent logs from being captured during the race window", () => {
       // 1. New tab opens, inject script loads
       mockInjectScript.settingsReceived = false;
       mockInjectScript.shouldCaptureDomain = false;
@@ -263,10 +257,10 @@ describe('Race Condition Fixes', () => {
       for (let i = 0; i < 5; i++) {
         const logEntry = {
           timestamp: new Date().toISOString(),
-          level: 'info',
-          message: `Race condition log ${i}`
+          level: "info",
+          message: `Race condition log ${i}`,
         };
-        
+
         mockAddLog(logEntry);
       }
 
@@ -280,18 +274,18 @@ describe('Race Condition Fixes', () => {
       // 5. New logs should now be captured
       const postSettingsLog = {
         timestamp: new Date().toISOString(),
-        level: 'info',
-        message: 'Post-settings log'
+        level: "info",
+        message: "Post-settings log",
       };
 
       mockAddLog(postSettingsLog);
 
       // Only the post-settings log should be captured
       expect(mockInjectScript.logBuffer).toHaveLength(1);
-      expect(mockInjectScript.logBuffer[0].message).toBe('Post-settings log');
+      expect(mockInjectScript.logBuffer[0].message).toBe("Post-settings log");
     });
 
-    it('should handle multiple tabs opening simultaneously', () => {
+    it("should handle multiple tabs opening simultaneously", () => {
       // Simulate multiple tabs opening at once
       const tabs = [];
 
@@ -302,25 +296,19 @@ describe('Race Condition Fixes', () => {
           logsEnabled: true,
           networkEnabled: true,
           logBuffer: [],
-          networkBuffer: []
+          networkBuffer: [],
         });
       }
 
       // All tabs should start with safe defaults
-      tabs.forEach(tab => {
+      tabs.forEach((tab) => {
         expect(tab.shouldCaptureDomain).toBe(false);
         expect(tab.settingsReceived).toBe(false);
         expect(tab.logBuffer).toHaveLength(0);
       });
 
       // Simulate early log attempts on all tabs
-      tabs.forEach((tab, index) => {
-        const logEntry = {
-          timestamp: new Date().toISOString(),
-          level: 'info',
-          message: `Tab ${index} early log`
-        };
-
+      tabs.forEach((tab) => {
         // Simulate addLog behavior
         if (!tab.settingsReceived) {
           // Should not capture
@@ -330,8 +318,8 @@ describe('Race Condition Fixes', () => {
     });
   });
 
-  describe('Settings Synchronization', () => {
-    it('should handle settings changes after initial load', () => {
+  describe("Settings Synchronization", () => {
+    it("should handle settings changes after initial load", () => {
       // Start with settings received and domain allowed
       mockInjectScript.settingsReceived = true;
       mockInjectScript.shouldCaptureDomain = true;
@@ -339,8 +327,8 @@ describe('Race Condition Fixes', () => {
       // Capture initial log
       const initialLog = {
         timestamp: new Date().toISOString(),
-        level: 'info',
-        message: 'Initial log'
+        level: "info",
+        message: "Initial log",
       };
 
       mockAddLog(initialLog);
@@ -352,18 +340,18 @@ describe('Race Condition Fixes', () => {
       // Try to capture another log
       const blockedLog = {
         timestamp: new Date().toISOString(),
-        level: 'info',
-        message: 'Blocked log'
+        level: "info",
+        message: "Blocked log",
       };
 
       mockAddLog(blockedLog);
 
       // Should still only have the initial log
       expect(mockInjectScript.logBuffer).toHaveLength(1);
-      expect(mockInjectScript.logBuffer[0].message).toBe('Initial log');
+      expect(mockInjectScript.logBuffer[0].message).toBe("Initial log");
     });
 
-    it('should handle re-enabling after being disabled', () => {
+    it("should handle re-enabling after being disabled", () => {
       // Start with settings received but domain not allowed
       mockInjectScript.settingsReceived = true;
       mockInjectScript.shouldCaptureDomain = false;
@@ -371,8 +359,8 @@ describe('Race Condition Fixes', () => {
       // Try to capture log - should be blocked
       const blockedLog = {
         timestamp: new Date().toISOString(),
-        level: 'info',
-        message: 'Blocked log'
+        level: "info",
+        message: "Blocked log",
       };
 
       mockAddLog(blockedLog);
@@ -384,13 +372,13 @@ describe('Race Condition Fixes', () => {
       // Try to capture log - should work now
       const allowedLog = {
         timestamp: new Date().toISOString(),
-        level: 'info',
-        message: 'Allowed log'
+        level: "info",
+        message: "Allowed log",
       };
 
       mockAddLog(allowedLog);
       expect(mockInjectScript.logBuffer).toHaveLength(1);
-      expect(mockInjectScript.logBuffer[0].message).toBe('Allowed log');
+      expect(mockInjectScript.logBuffer[0].message).toBe("Allowed log");
     });
   });
 });
