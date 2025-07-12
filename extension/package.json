@@ -4,6 +4,7 @@
   "description": "Chrome extension for Browser Relay",
   "private": true,
   "scripts": {
+    "build": "echo 'Extension build complete - no compilation needed'",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
