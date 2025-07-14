@@ -24,12 +24,12 @@ logsRouter.post("/", async (req, res) => {
       return res.status(400).json({ error: "Invalid log batch format" });
     }
 
-    // Filter out Browser Relay's own logs and log remaining for LLM visibility (if enabled)
+    // Filter out Local Lens's own logs and log remaining for LLM visibility (if enabled)
     const filteredLogs = batch.logs.filter(
       (log) =>
-        !log.message.includes("[Browser Relay]") &&
+        !log.message.includes("[Local Lens]") &&
         !log.message.includes("[Network Debug]") &&
-        !log.message.includes("browser-relay")
+        !log.message.includes("local-lens")
     );
 
     if (process.env.LOG_CONSOLE_MESSAGES !== "false") {
@@ -37,7 +37,9 @@ logsRouter.post("/", async (req, res) => {
         const url = new URL(log.pageUrl);
         const hostname = url.hostname;
         const date = new Date(log.timestamp);
-        const timestamp = isNaN(date.getTime()) ? log.timestamp : date.toISOString();
+        const timestamp = isNaN(date.getTime())
+          ? log.timestamp
+          : date.toISOString();
 
         // Create JSON structured log message
         const logData = {
@@ -48,11 +50,11 @@ logsRouter.post("/", async (req, res) => {
           page_url: log.pageUrl,
           message: log.message,
           ...(log.stackTrace && { stack_trace: log.stackTrace }),
-          ...(log.userAgent && { 
+          ...(log.userAgent && {
             user_agent: log.userAgent,
-            browser: extractBrowserInfo(log.userAgent)
+            browser: extractBrowserInfo(log.userAgent),
           }),
-          ...(log.metadata && { metadata: log.metadata })
+          ...(log.metadata && { metadata: log.metadata }),
         };
 
         // Use appropriate log level
@@ -66,7 +68,7 @@ logsRouter.post("/", async (req, res) => {
       });
     }
 
-    // Only store non-Browser Relay logs in database
+    // Only store non-Local Lens logs in database
     const insertedLogs = await logStorage.insertLogs(filteredLogs);
 
     res.json({
@@ -99,16 +101,14 @@ logsRouter.get("/", async (req, res) => {
 
     const parsedLimit = parseInt(limit as string);
     const parsedOffset = parseInt(offset as string);
-    
-    // Validate parsed values
-    const validLimit = isNaN(parsedLimit) || parsedLimit < 0 ? 100 : parsedLimit;
-    const validOffset = isNaN(parsedOffset) || parsedOffset < 0 ? 0 : parsedOffset;
 
-    const logs = await logStorage.getLogs(
-      validLimit,
-      validOffset,
-      filters
-    );
+    // Validate parsed values
+    const validLimit =
+      isNaN(parsedLimit) || parsedLimit < 0 ? 100 : parsedLimit;
+    const validOffset =
+      isNaN(parsedOffset) || parsedOffset < 0 ? 0 : parsedOffset;
+
+    const logs = await logStorage.getLogs(validLimit, validOffset, filters);
 
     res.json({ logs });
   } catch (error) {

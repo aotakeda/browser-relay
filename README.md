@@ -1,16 +1,29 @@
-# Browser Relay
+# Local Lens
 
-**A 100% local Chrome extension and HTTP/MCP server for capturing browser console logs and network requests for LLM analysis.**
+**A 100% local development monitoring tool that captures both browser and server logs for LLM analysis.**
 
 > ⚠️ **Important**: This tool is designed for local development use only. It runs entirely on your machine with no external connections or cloud services.
 
 ## Features
 
+### 🌐 Browser Monitoring
+
 - **Console Log Capture**: All console.log, warn, error, and info messages from any website
 - **Network Request Monitoring**: HTTP requests with headers, request/response bodies, and timing data
 - **Response Body Capture**: Full response content for JSON, HTML, XML, and JavaScript requests
-- **LLM-Optimized Output**: Structured JSON logs designed for AI assistant analysis
 - **Domain Filtering**: Capture logs only from specified domains
+
+### 🖥️ Server Log Capture
+
+- **Universal Backend Support**: Works with Rails, Express, Django, FastAPI, Laravel, and any framework
+- **Real-time Log Forwarding**: Captures stdout/stderr from any server process
+- **Zero Configuration**: No code changes or framework-specific setup required
+- **Process Management**: Graceful start/stop with proper signal handling
+
+### 🔧 Development Integration
+
+- **CLI Tool**: Simple `local-lens capture "your-server-command"` wrapper
+- **LLM-Optimized Output**: Structured JSON logs designed for AI assistant analysis
 - **Local HTTP Server**: Express.js server with SQLite storage (runs on port 27497) - no external connections
 - **MCP Integration**: Access logs via Model Context Protocol tools in AI assistants (Claude, Cursor, etc.)
 - **Real-time Streaming**: Server-Sent Events for live log monitoring
@@ -44,13 +57,101 @@ The server will start on `http://localhost:27497` (fixed port, not configurable)
 4. Select the `extension` directory from this project
 5. Configure domains in the extension popup to start capturing (no domains are captured by default)
 
-### 4. Test the Setup
+### 4. Test Browser Monitoring
 
-1. Click the Browser Relay extension icon and add a domain (e.g., `localhost:3000`)
+1. Click the Local Lens extension icon and add a domain (e.g., `localhost:3000`)
 2. Visit that domain
 3. Open browser console (F12)
-4. Type: `console.log("Hello from Browser Relay!")`
+4. Type: `console.log("Hello from Local Lens!")`
 5. Check server logs, use MCP tools to see captured logs or hit the API endpoints to see the data
+
+### 5. Test Server Log Capture
+
+1. Build the CLI tool: `npm run build:all`
+2. Start any server with log capture:
+
+   ```bash
+   # Rails server
+   local-lens capture "rails server"
+
+   # Express/Node.js
+   local-lens capture "npm start"
+
+   # Django
+   local-lens capture "python manage.py runserver"
+
+   # FastAPI
+   local-lens capture "uvicorn main:app --reload"
+   ```
+
+3. Your backend server logs will now appear in Local Lens with `source: "backend-console"`
+
+## CLI Tool for Server Log Capture
+
+The Local Lens CLI tool provides universal backend log capture that works with any framework without code modifications.
+
+### Installation
+
+Install the CLI tool globally:
+
+```bash
+npm install -g @local-lens/cli
+```
+
+Or build locally:
+
+```bash
+npm run build:all
+```
+
+### Basic Usage
+
+Wrap any server command with `local-lens capture`:
+
+```bash
+# Rails server
+local-lens capture "rails server"
+
+# Express/Node.js with custom port
+local-lens capture "npm start" "--" "--port" "4000"
+
+# Django development server
+local-lens capture "python manage.py runserver"
+
+# FastAPI with reload
+local-lens capture "uvicorn main:app --reload"
+
+# Any command with custom process name
+local-lens capture "rails server" --name "my-api"
+```
+
+### CLI Options
+
+- `--name <name>`: Custom process name for logs (default: command name)
+- `--server <url>`: Local Lens server URL (default: http://localhost:27497)
+- `--silent`: Suppress Local Lens output messages
+
+### Status Check
+
+Check if Local Lens server is running:
+
+```bash
+local-lens status
+```
+
+### How It Works
+
+1. **Process Wrapping**: CLI spawns your server process and captures stdout/stderr
+2. **Log Formatting**: Formats logs with Local Lens schema and metadata
+3. **Real-time Forwarding**: Sends logs to Local Lens server via HTTP API
+4. **Source Tagging**: Tags all logs with `source: "backend-console"` for filtering
+
+### Process Management
+
+- **Graceful Shutdown**: Ctrl+C properly terminates the wrapped process
+- **Signal Forwarding**: SIGTERM and SIGINT are forwarded to your server
+- **Exit Codes**: Preserves original process exit codes
+- **Error Handling**: Captures and reports process startup errors
 
 ## HTTP API Endpoints
 
@@ -72,7 +173,7 @@ The server will start on `http://localhost:27497` (fixed port, not configurable)
 ### System
 
 - `GET /health` - Server health check
-- `GET /health-browser-relay` - Special health check for extension port detection
+- `GET /health-local-lens` - Special health check for extension port detection
 - `GET /config` - Get server configuration for extension
 - `POST /mcp-config` - Update MCP server configuration
 
@@ -116,7 +217,7 @@ curl -X DELETE "http://localhost:27497/settings"             # Reset to defaults
 
 ## JSON Output Format
 
-Browser Relay outputs all logs and network requests in structured JSON format for easy programmatic analysis. This enables AI assistants and other tools to effectively parse and understand the captured data.
+Local Lens outputs all logs and network requests in structured JSON format for easy programmatic analysis. This enables AI assistants and other tools to effectively parse and understand the captured data.
 
 ### Console Logs JSON Structure
 
@@ -191,7 +292,7 @@ Browser Relay outputs all logs and network requests in structured JSON format fo
 Use the Claude Code CLI to add the MCP server:
 
 ```bash
-claude mcp add browser-relay -- npx browser-relay
+claude mcp add local-lens -- npx local-lens
 ```
 
 **Verify Installation:**
@@ -200,12 +301,12 @@ claude mcp add browser-relay -- npx browser-relay
 claude mcp list
 ```
 
-You should see `browser-relay` in the list of configured servers.
+You should see `local-lens` in the list of configured servers.
 
 **Remove Server:**
 
 ```bash
-claude mcp remove browser-relay
+claude mcp remove local-lens
 ```
 
 </details>
@@ -213,16 +314,14 @@ claude mcp remove browser-relay
 <details>
 <summary><strong>Using with Cursor</strong></summary>
 
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=browser-relay&config=JTdCJTIyY29tbWFuZCUyMiUzQSUyMm5weCUyMGJyb3dzZXItcmVsYXklMjIlN0Q%3D)
-
-Or, add the following to your `~/.cursor/mcp.json` file:
+Add the following to your `~/.cursor/mcp.json` file:
 
 ```bash
 {
   "mcpServers": {
-    "browser-relay": {
+    "local-lens": {
       "command": "npx",
-      "args": ["browser-relay"]
+      "args": ["local-lens"]
     }
   }
 }
@@ -231,7 +330,7 @@ Or, add the following to your `~/.cursor/mcp.json` file:
 
 </details>
 
-The MCP server allows you to access captured logs directly from Claude Code or Cursor for analysis and debugging. The MCP server is enabled by default when you start the Browser Relay server and shares the same database as the main server.
+The MCP server allows you to access captured logs directly from Claude Code or Cursor for analysis and debugging. The MCP server is enabled by default when you start the Local Lens server and shares the same database as the main server.
 
 **Prerequisites:**
 
@@ -240,8 +339,8 @@ The MCP server allows you to access captured logs directly from Claude Code or C
 
 ### How to trigger the MCP server
 
-`Check the console logs in browser-relay and fix the errors being triggered`
-`Check the network requests in browser-relay and fix the errors being triggered`
+`Check the console logs in local-lens and fix the errors being triggered`
+`Check the network requests in local-lens and fix the errors being triggered`
 
 ### Available MCP Tools
 
@@ -252,11 +351,17 @@ Once the MCP server is running, you can use these tools to analyze captured data
 Retrieve console logs with optional filters.
 
 ```javascript
-// Get recent error logs
+// Get recent error logs from browser
 get_console_logs({ level: "error", limit: 50 });
 
 // Get logs from specific website
 get_console_logs({ url: "github.com" });
+
+// Get backend server logs only
+get_console_logs({ url: "process://" });
+
+// Get logs from specific backend process
+get_console_logs({ url: "process://rails-api" });
 
 // Get logs from time range
 get_console_logs({
@@ -285,11 +390,17 @@ get_network_requests({ method: "POST" });
 Search console logs by text content.
 
 ```javascript
-// Search for specific errors
+// Search for specific errors across all sources
 search_logs({ query: "TypeError" });
 
-// Search for function names
+// Search for function names in browser logs
 search_logs({ query: "handleClick" });
+
+// Search for database queries in backend logs
+search_logs({ query: "SELECT" });
+
+// Search for errors in a specific backend process
+search_logs({ query: "error", url: "process://rails-api" });
 ```
 
 #### `search_network_requests`
@@ -313,6 +424,68 @@ clear_console_logs();
 clear_network_requests();
 ```
 
+## Combined Browser & Server Monitoring
+
+Local Lens provides comprehensive full-stack development monitoring by capturing both browser-side and server-side activity:
+
+### Complete Development Workflow
+
+1. **Start Local Lens Server**:
+
+   ```bash
+   npm run dev
+   ```
+
+2. **Configure Browser Monitoring**:
+
+   - Install the Chrome extension
+   - Add your frontend domains (e.g., `localhost:3000`)
+   - Browser console logs and network requests will be captured
+
+3. **Start Backend with Log Capture**:
+
+   ```bash
+   # Build CLI tool first
+   npm run build:all
+
+   # Start your backend with log capture
+   local-lens capture "rails server" --name "backend-api"
+   ```
+
+4. **Full-Stack Debugging with MCP Tools**:
+
+   ```javascript
+   // Get all recent errors from both frontend and backend
+   get_console_logs({ level: "error", limit: 20 });
+
+   // Search for API-related issues across both sides
+   search_logs({ query: "api" });
+   search_network_requests({ query: "/api/" });
+
+   // Monitor specific backend process logs
+   get_console_logs({ url: "process://backend-api" });
+
+   // Track frontend network requests to your API
+   get_network_requests({ url: "localhost:3000" });
+   ```
+
+### Data Source Identification
+
+All captured data is tagged with source information for easy filtering:
+
+- **Browser Logs**: `pageUrl` contains the actual website URL
+- **Server Logs**: `pageUrl` contains `process://[process-name]`
+- **Network Requests**: Captured only from browser (server HTTP calls would need separate tooling)
+
+### AI-Powered Analysis
+
+Use the MCP tools with AI assistants to:
+
+- Correlate frontend errors with backend logs
+- Identify API call failures and their server-side causes
+- Debug full-stack workflows end-to-end
+- Monitor performance across both client and server
+
 ## Development
 
 ### Architecture
@@ -327,7 +500,7 @@ clear_network_requests();
 ### Project Structure
 
 ```
-browser-relay/
+local-lens/
 ├── server/                    # HTTP/MCP Server
 │   ├── src/                  # TypeScript source code
 │   │   ├── index.ts          # Main server entry point
@@ -364,6 +537,16 @@ browser-relay/
 │   ├── tsconfig.json       # TypeScript configuration
 │   ├── tsconfig.mcp.json   # MCP TypeScript configuration
 │   └── jest.config.js      # Jest test configuration
+├── cli/                    # CLI Tool for Server Log Capture
+│   ├── src/                # TypeScript source code
+│   │   ├── index.ts        # CLI main entry point
+│   │   └── log-forwarder.ts # Log forwarding logic
+│   ├── dist/               # Compiled JavaScript
+│   │   ├── index.js        # CLI executable
+│   │   └── log-forwarder.js # Compiled forwarder
+│   ├── package.json        # CLI dependencies
+│   ├── tsconfig.json       # TypeScript configuration
+│   └── README.md           # CLI documentation
 ├── extension/              # Chrome Extension
 │   ├── manifest.json       # Extension manifest (v3)
 │   ├── inject.js          # Console log capture (MAIN world)
@@ -386,6 +569,7 @@ browser-relay/
 
 ### Key Components
 
+- `cli/`: Universal CLI tool for server log capture from any backend framework
 - `extension/`: Chrome extension with background service worker, dual content scripts, and popup UI
 - `server/`: Node.js/Express server with MCP integration and SQLite storage
 - `server/src/storage/`: Database layer with LogStorage, NetworkStorage, and SettingsStorage classes
@@ -421,6 +605,9 @@ npm run test:server     # Run server tests only
 npm run dev:server      # Start server in development mode
 npm run build:server    # Build server only
 
+# CLI-specific commands
+npm run build:cli       # Build CLI tool only
+local-lens status  # Check CLI tool status
 
 # Run all tests
 npm test
@@ -439,7 +626,7 @@ npm run lint:fix        # Auto-fix linting issues
 
 ### UI Configuration
 
-All Browser Relay settings are managed through the extension popup interface:
+All Local Lens settings are managed through the extension popup interface:
 
 #### Domain Configuration
 
@@ -466,7 +653,7 @@ All settings are saved automatically and persist across browser sessions. No ser
 ### Console Log Capture
 
 1. **Extension** injects scripts that wrap `console.log`, `console.warn`, `console.error`, and `console.info`
-2. **Smart Filtering** automatically excludes Browser Relay's own logs
+2. **Smart Filtering** automatically excludes Local Lens's own logs
 3. **Page Load Optimization** buffers logs during page load, sends after completion
 4. **Structured Data** includes timestamp, message, stack trace, page URL, and browser info
 
@@ -496,16 +683,16 @@ All settings are saved automatically and persist across browser sessions. No ser
    - Check that the extension is enabled in `chrome://extensions/`
    - Reload the webpage after installing the extension
    - Check browser console for extension errors
-   - Look for `[Browser Relay]` debug messages in the browser console
+   - Look for `[Local Lens]` debug messages in the browser console
    - Check the extension popup to ensure console logs are enabled
    - Verify the current domain is included in your capture scope (check the popup "Capture Scope" section)
 
 2. **Debug logging not working**
 
    - Open Chrome DevTools (F12) and go to the Console tab
-   - You should see `[Browser Relay] Initialized on domain.com` messages
+   - You should see `[Local Lens] Initialized on domain.com` messages
    - Try running `console.log("test")` - you should see capture messages
-   - Check the Extensions page and click "service worker" next to Browser Relay to see background script logs
+   - Check the Extensions page and click "service worker" next to Local Lens to see background script logs
 
 3. **Server connection errors**
 
@@ -515,7 +702,7 @@ All settings are saved automatically and persist across browser sessions. No ser
    - Check server logs for incoming requests
 
 4. **Domain filtering issues**
-   - Open the Browser Relay extension popup
+   - Open the Local Lens extension popup
    - Check your configured domains list to see your current configuration
    - Verify the current domain is in your explicitly configured domains list
    - Add domains using the input field in the popup

@@ -138,6 +138,8 @@ export const getLogs = async (
     url?: string;
     startTime?: string;
     endTime?: string;
+    source?: string; // For filtering by source: browser, backend-console
+    backendProcess?: string; // For filtering by specific backend process
   } = {}
 ): Promise<ConsoleLog[]> => {
   let query = 'SELECT * FROM logs WHERE 1=1';
@@ -161,6 +163,16 @@ export const getLogs = async (
   if (filters.endTime) {
     query += ' AND timestamp <= ?';
     params.push(filters.endTime);
+  }
+
+  if (filters.source) {
+    query += ' AND JSON_EXTRACT(metadata, "$.source") = ?';
+    params.push(filters.source);
+  }
+
+  if (filters.backendProcess) {
+    query += ' AND JSON_EXTRACT(metadata, "$.backendProcess") = ?';
+    params.push(filters.backendProcess);
   }
   
   query += ' ORDER BY id DESC LIMIT ? OFFSET ?';
@@ -186,13 +198,30 @@ export const clearLogs = async (): Promise<number> => {
   return count ? count.count : 0;
 };
 
-export const searchLogs = async (query: string, limit = 100): Promise<ConsoleLog[]> => {
-  const rows = await allAsync<LogRow>(
-    `SELECT * FROM logs 
-     WHERE message LIKE ? OR stackTrace LIKE ?
-     ORDER BY id DESC LIMIT ?`,
-    [`%${query}%`, `%${query}%`, limit]
-  );
+export const searchLogs = async (
+  query: string, 
+  limit = 100, 
+  filters?: { source?: string; backendProcess?: string }
+): Promise<ConsoleLog[]> => {
+  let sql = `SELECT * FROM logs 
+             WHERE (message LIKE ? OR stackTrace LIKE ? OR metadata LIKE ?)`;
+  
+  const params: unknown[] = [`%${query}%`, `%${query}%`, `%${query}%`];
+
+  if (filters?.source) {
+    sql += ' AND JSON_EXTRACT(metadata, "$.source") = ?';
+    params.push(filters.source);
+  }
+
+  if (filters?.backendProcess) {
+    sql += ' AND JSON_EXTRACT(metadata, "$.backendProcess") = ?';
+    params.push(filters.backendProcess);
+  }
+
+  sql += ' ORDER BY id DESC LIMIT ?';
+  params.push(limit);
+
+  const rows = await allAsync<LogRow>(sql, params);
   
   return rows.map((row) => ({
     id: row.id,

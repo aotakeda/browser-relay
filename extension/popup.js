@@ -1,4 +1,4 @@
-// Popup script for Browser Relay extension
+// Popup script for Local Lens extension
 (async () => {
   const loadingEl = document.getElementById("loading");
   const contentEl = document.getElementById("content");
@@ -122,7 +122,7 @@
           specificDomains = settings.specificDomains || []; // default to empty array
         } else {
           console.warn(
-            "[Browser Relay] Failed to load settings from server, using defaults"
+            "[Local Lens] Failed to load settings from server, using defaults"
           );
           // Use default values
           logsEnabled = true;
@@ -131,10 +131,7 @@
           specificDomains = [];
         }
       } catch (error) {
-        console.warn(
-          "[Browser Relay] Error loading settings from server:",
-          error
-        );
+        console.warn("[Local Lens] Error loading settings from server:", error);
         // Use default values
         logsEnabled = true;
         networkEnabled = true;
@@ -145,7 +142,7 @@
       // Check server connection
       try {
         const response = await fetch(
-          "http://localhost:27497/health-browser-relay",
+          "http://localhost:27497/health-local-lens",
           {
             method: "GET",
             signal: AbortSignal.timeout(3000),
@@ -181,7 +178,7 @@
       });
     } catch (error) {
       console.warn(
-        "[Browser Relay] Failed to save domain settings to server:",
+        "[Local Lens] Failed to save domain settings to server:",
         error
       );
     }
@@ -497,7 +494,7 @@
         });
       } catch (error) {
         console.warn(
-          "[Browser Relay] Failed to save logs setting to server:",
+          "[Local Lens] Failed to save logs setting to server:",
           error
         );
       }
@@ -534,7 +531,7 @@
         });
       } catch (error) {
         console.warn(
-          "[Browser Relay] Failed to save network setting to server:",
+          "[Local Lens] Failed to save network setting to server:",
           error
         );
       }
@@ -571,7 +568,7 @@
         });
       } catch (error) {
         console.warn(
-          "[Browser Relay] Failed to save MCP setting to server:",
+          "[Local Lens] Failed to save MCP setting to server:",
           error
         );
       }
@@ -808,13 +805,10 @@
   // Refresh connection status every 5 seconds
   setInterval(async () => {
     try {
-      const response = await fetch(
-        "http://localhost:27497/health-browser-relay",
-        {
-          method: "GET",
-          signal: AbortSignal.timeout(2000),
-        }
-      );
+      const response = await fetch("http://localhost:27497/health-local-lens", {
+        method: "GET",
+        signal: AbortSignal.timeout(2000),
+      });
       const newConnected = response.ok;
       if (newConnected !== isConnected) {
         isConnected = newConnected;

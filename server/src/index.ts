@@ -24,27 +24,39 @@ const createLogger = () => {
   if (process.env.NODE_ENV === "production") {
     return pino({ level: "info" });
   }
-  
+
   // Development logger with custom colorization
-  const logWithLevel = (level: string, message: unknown, ...args: unknown[]) => {
-    const timestamp = new Date().toISOString().replace('T', ' ').replace('Z', '');
-    
+  const logWithLevel = (
+    level: string,
+    message: unknown,
+    ...args: unknown[]
+  ) => {
+    const timestamp = new Date()
+      .toISOString()
+      .replace("T", " ")
+      .replace("Z", "");
+
     // Handle string messages
-    if (typeof message === 'string') {
-      const data = args.length > 0 && typeof args[0] === 'object' && args[0] !== null 
-        ? { message, ...args[0] as Record<string, unknown> } 
-        : { message };
+    if (typeof message === "string") {
+      const data =
+        args.length > 0 && typeof args[0] === "object" && args[0] !== null
+          ? { message, ...(args[0] as Record<string, unknown>) }
+          : { message };
       console.log(formatLogEntry(level, timestamp, data));
     } else {
       console.log(formatLogEntry(level, timestamp, message));
     }
   };
-  
+
   return {
-    info: (message: unknown, ...args: unknown[]) => logWithLevel('info', message, ...args),
-    warn: (message: unknown, ...args: unknown[]) => logWithLevel('warn', message, ...args),
-    error: (message: unknown, ...args: unknown[]) => logWithLevel('error', message, ...args),
-    debug: (message: unknown, ...args: unknown[]) => logWithLevel('debug', message, ...args),
+    info: (message: unknown, ...args: unknown[]) =>
+      logWithLevel("info", message, ...args),
+    warn: (message: unknown, ...args: unknown[]) =>
+      logWithLevel("warn", message, ...args),
+    error: (message: unknown, ...args: unknown[]) =>
+      logWithLevel("error", message, ...args),
+    debug: (message: unknown, ...args: unknown[]) =>
+      logWithLevel("debug", message, ...args),
   };
 };
 
@@ -59,21 +71,19 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 
-
 app.use("/logs", logsRouter);
 app.use("/network-requests", networkRequestsRouter);
 app.use("/network-config", networkConfigRouter);
 app.use("/settings", settingsRouter);
 
-// Health check endpoint for Browser Relay extension port detection
-app.get("/health-browser-relay", (_req, res) => {
+// Health check endpoint for Local Lens extension port detection
+app.get("/health-local-lens", (_req, res) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
     port: PORT,
   });
 });
-
 
 // Keep the standard health endpoint for general use
 app.get("/health", (_req, res) => {
@@ -92,18 +102,18 @@ app.get("/config", (_req, res) => {
 app.post("/mcp-config", (req, res) => {
   try {
     const { mcpEnabled: newMcpEnabled } = req.body;
-    
-    if (typeof newMcpEnabled === 'boolean') {
+
+    if (typeof newMcpEnabled === "boolean") {
       mcpEnabled = newMcpEnabled;
-      
+
       if (mcpEnabled) {
         // Initialize MCP server if not already done
-        setupMCPServer().catch(error => {
+        setupMCPServer().catch((error) => {
           logger.error("Failed to setup MCP server:", error);
         });
       }
-      
-      logger.info(`MCP mode ${mcpEnabled ? 'enabled' : 'disabled'} via UI`);
+
+      logger.info(`MCP mode ${mcpEnabled ? "enabled" : "disabled"} via UI`);
       res.json({ success: true, mcpEnabled });
     } else {
       res.status(400).json({ error: "Invalid mcpEnabled value" });
@@ -118,7 +128,7 @@ async function start() {
   try {
     await initializeDatabase();
     logger.info("Database initialized");
-    
+
     await initializeSettingsDatabase();
     logger.info("Settings database initialized");
 
@@ -143,7 +153,9 @@ start();
 
 // Type guard for SQLite errors
 function isSQLiteError(err: Error): err is Error & { code: string } {
-  return 'code' in err && typeof (err as Record<string, unknown>).code === 'string';
+  return (
+    "code" in err && typeof (err as Record<string, unknown>).code === "string"
+  );
 }
 
 // Graceful shutdown
@@ -153,7 +165,7 @@ process.on("SIGTERM", shutdown);
 async function shutdown() {
   logger.info("Shutting down gracefully...");
 
-  // Close HTTP server first
+  // Close HTTP server
   await new Promise<void>((resolve) => {
     httpServer.close(() => {
       logger.info("HTTP server closed");
@@ -165,12 +177,12 @@ async function shutdown() {
   try {
     const { db } = await import("@/storage/database");
     const { settingsDb } = await import("@/storage/settings-database");
-    
+
     // Close main database if it exists
     if (db) {
       await new Promise<void>((resolve) => {
         db.close((err) => {
-          if (err && (!isSQLiteError(err) || err.code !== 'SQLITE_MISUSE')) {
+          if (err && (!isSQLiteError(err) || err.code !== "SQLITE_MISUSE")) {
             logger.error("Error closing database:", err);
           } else if (!err) {
             logger.info("Database connection closed");
@@ -184,7 +196,7 @@ async function shutdown() {
     if (settingsDb) {
       await new Promise<void>((resolve) => {
         settingsDb.close((err) => {
-          if (err && (!isSQLiteError(err) || err.code !== 'SQLITE_MISUSE')) {
+          if (err && (!isSQLiteError(err) || err.code !== "SQLITE_MISUSE")) {
             logger.error("Error closing settings database:", err);
           } else if (!err) {
             logger.info("Settings database connection closed");

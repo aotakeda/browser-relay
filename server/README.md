@@ -1,6 +1,6 @@
-# Browser Relay Server
+# Local Lens Server
 
-**HTTP/MCP server component for Browser Relay - captures console logs and network requests with response bodies for LLM analysis.**
+**HTTP/MCP server component for Local Lens - captures console logs and network requests with response bodies for LLM analysis.**
 
 > ⚠️ **Important**: This server is designed for local development use only. It runs entirely on your machine with no external connections.
 
@@ -64,6 +64,7 @@ LOG_NETWORK_REQUESTS=true
 All console logs and network requests are output in structured JSON format:
 
 ### Console Logs
+
 ```json
 {
   "type": "console_log",
@@ -80,6 +81,7 @@ All console logs and network requests are output in structured JSON format:
 ```
 
 ### Network Requests
+
 ```json
 {
   "type": "network_request",
@@ -101,7 +103,7 @@ All console logs and network requests are output in structured JSON format:
   },
   "response_headers": { "Content-Type": "application/json" },
   "response_body": {
-    "type": "json|text|encoded_data", 
+    "type": "json|text|encoded_data",
     "data": "processed response content",
     "truncated": false,
     "original_length": 2048
@@ -117,15 +119,15 @@ All console logs and network requests are output in structured JSON format:
 
 ## Features
 
-- **🖥️ Console Logs**: Captures all console.log/warn/error/info
-- **🌐 Network Requests**: Full HTTP request/response monitoring with response bodies
-- **📄 Response Body Capture**: Full content for JSON, HTML, XML, and JavaScript responses
-- **🤖 LLM-Optimized**: Structured JSON output for AI analysis
-- **🧹 Smart Filtering**: Excludes noise (images, tracking, binary content)
-- **💾 SQLite Storage**: Persistent local database
-- **🔄 Circular Buffer**: 10k item limit with auto-cleanup
-- **⚡ Real-time**: Server-Sent Events streaming
-- **🔌 MCP Integration**: AI assistant tool access
+- **Console Logs**: Captures all console.log/warn/error/info
+- **Network Requests**: Full HTTP request/response monitoring with response bodies
+- **Response Body Capture**: Full content for JSON, HTML, XML, and JavaScript responses
+- **LLM-Optimized**: Structured JSON output for AI analysis
+- **Smart Filtering**: Excludes noise (images, tracking, binary content)
+- **SQLite Storage**: Persistent local database
+- **Circular Buffer**: 10k item limit with auto-cleanup
+- **Real-time**: Server-Sent Events streaming
+- **MCP Integration**: AI assistant tool access
 
 ## Development
 

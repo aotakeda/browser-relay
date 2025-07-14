@@ -11,25 +11,17 @@ module.exports = [
       '*.config.js',
       'eslint.config.js',
       'jest.config.js',
-      'server/dist/**',
-      'server/dist-mcp/**',
-      'server/data/**',
-      'server/src/mcp-standalone.ts',
-      'extension/icons/**',
-      'cli/dist/**',
-      'cli/eslint.config.js',
-      'cli/jest.config.js',
       '**/*.d.ts',
     ],
   },
   {
-    files: ['server/src/**/*.ts', 'server/src/**/*.tsx', 'cli/src/**/*.ts', 'cli/src/**/*.tsx'],
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
-        project: ['./server/tsconfig.json', './cli/tsconfig.json'],
+        project: ['./tsconfig.json'],
       },
     },
     plugins: {
@@ -62,38 +54,10 @@ module.exports = [
     },
   },
   {
-    files: ['**/*.js', '**/*.jsx'],
-    languageOptions: {
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-    },
-    plugins: {
-      'unused-imports': unusedImports,
-    },
-    rules: {
-      // Unused imports and variables
-      'unused-imports/no-unused-imports': 'error',
-      'unused-imports/no-unused-vars': [
-        'warn',
-        {
-          vars: 'all',
-          varsIgnorePattern: '^_',
-          args: 'after-used',
-          argsIgnorePattern: '^_',
-        },
-      ],
-      
-      // General rules
-      'no-debugger': 'error',
-      'no-var': 'error',
-      'prefer-const': 'error',
-      'no-unused-vars': 'off', // Disabled in favor of unused-imports
-    },
-  },
-  {
     files: ['**/*.test.ts', '**/*.test.js'],
     rules: {
       // Test-specific rules can be added here
+      '@typescript-eslint/no-explicit-any': 'off', // Allow any in tests
     },
   },
 ];

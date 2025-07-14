@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Browser Relay",
+  "name": "Local Lens",
   "version": "0.1.4",
   "description": "Relays console logs and network requests to local server for development",
   "permissions": ["storage", "tabs", "webRequest"],
   "host_permissions": ["http://localhost:*/*", "<all_urls>"],
   "action": {
-    "default_title": "Browser Relay - Click to view logs",
+    "default_title": "Local Lens - Click to view logs",
     "default_popup": "popup.html"
   },
   "background": {

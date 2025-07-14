@@ -1,26 +1,30 @@
 {
-  "name": "browser-relay",
+  "name": "local-lens",
   "version": "0.1.4",
   "description": "Chrome extension and HTTP/MCP server for capturing console logs",
   "private": true,
   "workspaces": [
     "server",
-    "extension"
+    "extension",
+    "cli"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=server",
     "start": "npm run start --workspace=server",
     "build": "npm run build --workspaces",
     "build:mcp": "npm run build:mcp --workspace=server",
-    "build:all": "npm run build:all --workspace=server",
+    "build:all": "npm run build:all --workspace=server && npm run build --workspace=cli",
+    "build:cli": "npm run build --workspace=cli",
     "test": "npm run test --workspaces",
     "test:server": "npm run test --workspace=server",
     "test:extension": "npm run test --workspace=extension",
+    "test:cli": "npm run test --workspace=cli",
     "test:settings": "npm run test --workspace=server -- --testPathPattern=settings",
     "test:domain-filtering": "npm run test --workspace=extension -- --testPathPattern=domain-filtering",
     "test:race-condition": "npm run test --workspace=extension -- --testPathPattern=race-condition",
     "lint": "eslint . --ext .ts,.js,.tsx,.jsx",
-    "lint:fix": "eslint . --ext .ts,.js,.tsx,.jsx --fix"
+    "lint:fix": "eslint . --ext .ts,.js,.tsx,.jsx --fix",
+    "local-lens": "./cli/dist/index.js"
   },
   "keywords": [
     "console",

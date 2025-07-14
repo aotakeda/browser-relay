@@ -1,7 +1,7 @@
 {
-  "name": "browser-relay-extension",
+  "name": "local-lens-extension",
   "version": "0.1.4",
-  "description": "Chrome extension for Browser Relay",
+  "description": "Chrome extension for Local Lens",
   "private": true,
   "scripts": {
     "build": "echo 'Extension build complete - no compilation needed'",
