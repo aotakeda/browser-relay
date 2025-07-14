@@ -1,5 +1,5 @@
 {
-  "name": "@local-lens/cli",
+  "name": "local-lens-cli",
   "version": "0.1.0",
   "description": "Universal CLI tool to capture server logs from any backend framework",
   "main": "dist/index.js",
@@ -16,8 +16,14 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix"
   },
-  "keywords": ["logging", "development", "debugging", "backend", "server"],
-  "author": "Local Lens",
+  "keywords": [
+    "logging",
+    "development",
+    "debugging",
+    "backend",
+    "server"
+  ],
+  "author": "Arthur Takeda",
   "license": "MIT",
   "repository": {
     "type": "git",

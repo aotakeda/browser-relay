@@ -33,7 +33,7 @@
     "mcp",
     "developer-tools"
   ],
-  "author": "",
+  "author": "Arthur Takeda",
   "license": "MIT",
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.35.1",

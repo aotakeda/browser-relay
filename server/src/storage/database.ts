@@ -10,7 +10,7 @@ interface CountResult {
 }
 
 import path from 'path';
-import fs from 'fs';
+import { ensureDataDirectory, createDatabaseConnection } from './directory-utils';
 
 // Use different database for tests
 const isTest = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID;
@@ -79,18 +79,11 @@ export async function initializeDatabase() {
     if (!db) {
       // Create data directory if it doesn't exist (only for non-test environments)
       if (!isTest) {
-        if (!fs.existsSync(dataDir)) {
-          fs.mkdirSync(dataDir, { recursive: true });
-        }
-        
-        // Ensure the database file can be created by touching it if it doesn't exist
-        if (!fs.existsSync(dbPath)) {
-          fs.writeFileSync(dbPath, '');
-        }
+        await ensureDataDirectory(dataDir);
       }
       
-      // Now create the database connection
-      db = new sqlite3.Database(dbPath);
+      // Create the database connection with proper error handling
+      db = await createDatabaseConnection(dbPath, sqlite3);
     }
 
     await runAsync(`

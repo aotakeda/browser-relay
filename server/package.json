@@ -1,6 +1,6 @@
 {
   "name": "local-lens",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Chrome extension and HTTP/MCP server for relaying console logs locally",
   "main": "dist/index.js",
   "bin": {
