@@ -32,6 +32,30 @@
 - **Batch Processing**: Efficient batching with retry logic and page load optimization
 - **Privacy First**: All data stays on your machine, zero external connections
 
+## Prerequisites
+
+- **Node.js**: Version 18.0.0 or higher
+- **Chrome Browser**: For the browser monitoring extension
+- **npm**: Package manager (comes with Node.js)
+
+## Package Structure
+
+Local Lens consists of two main npm packages:
+
+1. **`local-lens`** (Server/MCP Package)
+   - Contains the HTTP server and MCP server
+   - Binary: `local-lens` (for MCP integration)
+   - Used for: MCP integration with Claude Code/Cursor
+   - Install: `npm install -g local-lens` (for MCP)
+
+2. **`local-lens-cli`** (CLI Tool Package)  
+   - Contains the CLI tool for server log capture
+   - Binary: `local-lens` (for CLI commands)
+   - Used for: Wrapping backend server commands
+   - Install: `npm install -g local-lens-cli` (for CLI)
+
+**Important**: Both packages provide a `local-lens` binary but for different purposes. The server package is for MCP integration, while the CLI package is for capturing server logs.
+
 ## Quick Start
 
 ### 1. Install Dependencies
@@ -67,22 +91,32 @@ The server will start on `http://localhost:27497` (fixed port, not configurable)
 
 ### 5. Test Server Log Capture
 
-1. Build the CLI tool: `npm run build:all`
+1. Install the CLI tool globally (`npm install -g local-lens-cli`) or use with npx
 2. Start any server with log capture:
 
    ```bash
    # Rails server
    local-lens capture "rails server"
+   # or with npx
+   npx local-lens-cli capture "rails server"
 
    # Express/Node.js
    local-lens capture "npm start"
+   # or with npx
+   npx local-lens-cli capture "npm start"
 
    # Django
    local-lens capture "python manage.py runserver"
+   # or with npx
+   npx local-lens-cli capture "python manage.py runserver"
 
    # FastAPI
    local-lens capture "uvicorn main:app --reload"
+   # or with npx
+   npx local-lens-cli capture "uvicorn main:app --reload"
    ```
+
+   **Note**: The CLI binary is `local-lens` (installed from the `local-lens-cli` package)
 
 3. Your backend server logs will now appear in Local Lens with `source: "backend-console"`
 
@@ -95,7 +129,13 @@ The Local Lens CLI tool provides universal backend log capture that works with a
 Install the CLI tool globally:
 
 ```bash
-npm install -g @local-lens/cli
+npm install -g local-lens-cli
+```
+
+Or use with npx (no installation required):
+
+```bash
+npx local-lens-cli capture "your-server-command"
 ```
 
 Or build locally:
@@ -106,24 +146,36 @@ npm run build:all
 
 ### Basic Usage
 
-Wrap any server command with `local-lens capture`:
+Wrap any server command with `local-lens capture` (if installed globally) or `npx local-lens-cli capture`:
 
 ```bash
 # Rails server
 local-lens capture "rails server"
+# or with npx
+npx local-lens-cli capture "rails server"
 
 # Express/Node.js with custom port
 local-lens capture "npm start" "--" "--port" "4000"
+# or with npx
+npx local-lens-cli capture "npm start" "--" "--port" "4000"
 
 # Django development server
 local-lens capture "python manage.py runserver"
+# or with npx
+npx local-lens-cli capture "python manage.py runserver"
 
 # FastAPI with reload
 local-lens capture "uvicorn main:app --reload"
+# or with npx
+npx local-lens-cli capture "uvicorn main:app --reload"
 
 # Any command with custom process name
 local-lens capture "rails server" --name "my-api"
+# or with npx
+npx local-lens-cli capture "rails server" --name "my-api"
 ```
+
+**Package Distinction**: The CLI binary is named `local-lens` but comes from the `local-lens-cli` npm package.
 
 ### CLI Options
 
@@ -137,7 +189,11 @@ Check if Local Lens server is running:
 
 ```bash
 local-lens status
+# or with npx
+npx local-lens-cli status
 ```
+
+**Note**: The `local-lens` binary is provided by the `local-lens-cli` package.
 
 ### How It Works
 
@@ -286,13 +342,19 @@ Local Lens outputs all logs and network requests in structured JSON format for e
 
 ## MCP Integration
 
+**Package Distinction**: MCP integration uses the `local-lens` package (server/MCP), NOT the `local-lens-cli` package (CLI tool).
+
 <details>
 <summary><strong>Using with Claude Code</strong></summary>
 
-Use the Claude Code CLI to add the MCP server:
+First install the MCP server package globally, then add it to Claude Code:
 
 ```bash
-claude mcp add local-lens -- npx local-lens
+# Install the MCP server package (not the CLI package)
+npm install -g local-lens
+
+# Add to Claude Code
+claude mcp add local-lens -- local-lens
 ```
 
 **Verify Installation:**
@@ -309,24 +371,31 @@ You should see `local-lens` in the list of configured servers.
 claude mcp remove local-lens
 ```
 
+**Important**: This uses the `local-lens` package (server with MCP support), not `local-lens-cli`.
+
 </details>
 
 <details>
 <summary><strong>Using with Cursor</strong></summary>
 
-Add the following to your `~/.cursor/mcp.json` file:
+First install the MCP server package globally, then add the following to your `~/.cursor/mcp.json` file:
 
 ```bash
+# Install the MCP server package (not the CLI package)
+npm install -g local-lens
+```
+
+```json
 {
   "mcpServers": {
     "local-lens": {
-      "command": "npx",
-      "args": ["local-lens"]
+      "command": "local-lens"
     }
   }
 }
-
 ```
+
+**Important**: This uses the `local-lens` package (server with MCP support), not `local-lens-cli`.
 
 </details>
 
@@ -450,7 +519,11 @@ Local Lens provides comprehensive full-stack development monitoring by capturing
 
    # Start your backend with log capture
    local-lens capture "rails server" --name "backend-api"
+   # or with npx (no installation required)
+   npx local-lens-cli capture "rails server" --name "backend-api"
    ```
+
+   **Note**: The `local-lens` binary is provided by the `local-lens-cli` package.
 
 4. **Full-Stack Debugging with MCP Tools**:
 
@@ -607,7 +680,7 @@ npm run build:server    # Build server only
 
 # CLI-specific commands
 npm run build:cli       # Build CLI tool only
-local-lens status  # Check CLI tool status
+local-lens status       # Check CLI tool status (binary from local-lens-cli package)
 
 # Run all tests
 npm test
@@ -675,6 +748,22 @@ All settings are saved automatically and persist across browser sessions. No ser
 5. **MCP Integration** enables AI assistant access for analysis and debugging
 
 ## Troubleshooting
+
+### Database Issues
+
+1. **SQLITE_READONLY or database creation errors**
+
+   - The server automatically creates the `/server/data/` directory and database files on first run
+   - If you encounter database errors, ensure the server has write permissions to the project directory
+   - Check server logs for specific database initialization messages
+   - The server creates two databases: `browserrelay.db` (main) and `browserrelay-settings.db` (settings)
+
+2. **Database corruption or connection issues**
+
+   - Stop the server: `Ctrl+C`
+   - Remove database files: `rm -rf server/data/`
+   - Restart the server: `npm run dev`
+   - The databases will be recreated automatically
 
 ### Chrome Extension Issues
 

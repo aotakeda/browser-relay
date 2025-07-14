@@ -12,6 +12,7 @@ import { promisify } from "util";
 import path from "path";
 import { existsSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
+import { ensureDataDirectory, createDatabaseConnection } from "./storage/directory-utils.js";
 
 // Database setup - use same path as main server
 const __filename = fileURLToPath(import.meta.url);
@@ -191,22 +192,15 @@ const ensureResponseSize = (data: any): any => {
 
 // Initialize database
 async function initializeDatabase() {
-  // Initialize database connection if not already done
-  if (!db) {
-    // Ensure data directory exists
-    if (!existsSync(dataDir)) {
-      mkdirSync(dataDir, { recursive: true });
+  try {
+    // Initialize database connection if not already done
+    if (!db) {
+      // Create data directory if it doesn't exist
+      await ensureDataDirectory(dataDir);
+      
+      // Create the database connection with proper error handling
+      db = await createDatabaseConnection(dbPath, sqlite3);
     }
-
-    // Ensure the database file can be created by touching it if it doesn't exist
-    if (!existsSync(dbPath)) {
-      const fs = await import("fs");
-      fs.writeFileSync(dbPath, "");
-    }
-
-    // Now create the database connection
-    db = new sqlite3.Database(dbPath);
-  }
 
   await dbRun(`
     CREATE TABLE IF NOT EXISTS logs (
@@ -252,6 +246,12 @@ async function initializeDatabase() {
   await dbRun(
     `CREATE INDEX IF NOT EXISTS idx_network_requests_method ON network_requests (method)`
   );
+
+    console.log('MCP database initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize MCP database:', error);
+    throw error;
+  }
 }
 
 const tools = [

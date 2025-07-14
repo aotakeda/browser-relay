@@ -1,6 +1,6 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
-import fs from 'fs';
+import { ensureDataDirectory, createDatabaseConnection } from './directory-utils';
 
 interface RunResult {
   lastID: number;
@@ -74,18 +74,11 @@ export async function initializeSettingsDatabase() {
     if (!settingsDb) {
       // Create data directory if it doesn't exist (only for non-test environments)
       if (!isTest) {
-        if (!fs.existsSync(dataDir)) {
-          fs.mkdirSync(dataDir, { recursive: true });
-        }
-        
-        // Ensure the database file can be created by touching it if it doesn't exist
-        if (!fs.existsSync(dbPath)) {
-          fs.writeFileSync(dbPath, '');
-        }
+        await ensureDataDirectory(dataDir);
       }
       
-      // Now create the database connection
-      settingsDb = new sqlite3.Database(dbPath);
+      // Create the database connection with proper error handling
+      settingsDb = await createDatabaseConnection(dbPath, sqlite3);
     }
 
     // Create extension_settings table
