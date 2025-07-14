@@ -1,10 +1,10 @@
 {
-  "name": "browser-relay",
+  "name": "local-lens",
   "version": "0.1.4",
   "description": "Chrome extension and HTTP/MCP server for relaying console logs locally",
   "main": "dist/index.js",
   "bin": {
-    "browser-relay": "dist-mcp/mcp-standalone.js"
+    "local-lens": "dist-mcp/mcp-standalone.js"
   },
   "scripts": {
     "dev": "npm run build:all && tsx watch src/index.ts",
@@ -29,12 +29,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/aotakeda/browser-relay.git"
+    "url": "https://github.com/aotakeda/local-lens.git"
   },
   "bugs": {
-    "url": "https://github.com/aotakeda/browser-relay/issues"
+    "url": "https://github.com/aotakeda/local-lens/issues"
   },
-  "homepage": "https://github.com/aotakeda/browser-relay#readme",
+  "homepage": "https://github.com/aotakeda/local-lens#readme",
   "author": "Arthur Takeda",
   "license": "MIT",
   "files": [
@@ -48,12 +48,14 @@
   "dependencies": {
     "@colors/colors": "^1.6.0",
     "@modelcontextprotocol/sdk": "^0.5.0",
+    "@types/uuid": "^10.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.0.1",
     "express": "^4.18.2",
     "pino": "^9.7.0",
     "pino-pretty": "^13.0.0",
-    "sqlite3": "^5.1.6"
+    "sqlite3": "^5.1.6",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@types/colors": "^1.2.4",

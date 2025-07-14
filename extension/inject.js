@@ -43,7 +43,7 @@
       return { ...headers };
     } catch (error) {
       // If all else fails, return empty object
-      console.warn("[Browser Relay] Failed to serialize headers:", error);
+      console.warn("[Local Lens] Failed to serialize headers:", error);
       return {};
     }
   };
@@ -96,11 +96,11 @@
   };
 
   const addLog = (logEntry) => {
-    // Filter out Browser Relay's own logs to avoid noise
+    // Filter out Local Lens's own logs to avoid noise
     if (
-      logEntry.message.includes("[Browser Relay]") ||
+      logEntry.message.includes("[Local Lens]") ||
       logEntry.message.includes("[Network Debug]") ||
-      logEntry.message.includes("browser-relay")
+      logEntry.message.includes("local-lens")
     ) {
       return;
     }
@@ -135,13 +135,10 @@
   // Simple server check - only check port 27497
   const checkServer = async () => {
     try {
-      const response = await fetch(
-        "http://localhost:27497/health-browser-relay",
-        {
-          method: "GET",
-          signal: AbortSignal.timeout(2000),
-        }
-      );
+      const response = await fetch("http://localhost:27497/health-local-lens", {
+        method: "GET",
+        signal: AbortSignal.timeout(2000),
+      });
 
       if (response.ok) {
         // Also fetch network configuration
@@ -529,11 +526,8 @@
     method = "GET",
     statusCode = null
   ) => {
-    // Skip Browser Relay's own requests
-    if (
-      url.includes("localhost:27497") ||
-      url.includes("/health-browser-relay")
-    ) {
+    // Skip Local Lens's own requests
+    if (url.includes("localhost:27497") || url.includes("/health-local-lens")) {
       return false;
     }
 

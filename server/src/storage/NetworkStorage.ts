@@ -12,6 +12,9 @@ type NetworkRequestFilter = {
   statusCode?: number;
   startTime?: string;
   endTime?: string;
+  source?: string; // For filtering by source: browser, backend-inbound, backend-outbound
+  backendProcess?: string; // For filtering by specific backend process
+  correlationId?: string; // For tracing related requests
 };
 
 // Event listeners for new requests
@@ -155,6 +158,21 @@ export const getRequests = async (
     params.push(filters.endTime);
   }
 
+  if (filters.source) {
+    query += ' AND JSON_EXTRACT(metadata, "$.source") = ?';
+    params.push(filters.source);
+  }
+
+  if (filters.backendProcess) {
+    query += ' AND JSON_EXTRACT(metadata, "$.backendProcess") = ?';
+    params.push(filters.backendProcess);
+  }
+
+  if (filters.correlationId) {
+    query += ' AND JSON_EXTRACT(metadata, "$.correlationId") = ?';
+    params.push(filters.correlationId);
+  }
+
   query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
   params.push(limit, offset);
 
@@ -210,21 +228,39 @@ export const getRequestCount = async (): Promise<number> => {
   return result?.count || 0;
 };
 
-export const searchRequests = async (query: string, limit = 100): Promise<NetworkRequest[]> => {
+export const searchRequests = async (
+  query: string, 
+  limit = 100, 
+  filters?: { source?: string; backendProcess?: string }
+): Promise<NetworkRequest[]> => {
   if (!query) {
     query = '';
   }
   const searchTerm = `%${query}%`;
-  const rows = await allAsync<NetworkRequest>(
-    `SELECT * FROM network_requests 
-     WHERE url LIKE ? 
-     OR requestHeaders LIKE ? 
-     OR responseHeaders LIKE ?
-     OR requestBody LIKE ?
-     OR responseBody LIKE ?
-     ORDER BY timestamp DESC LIMIT ?`,
-    [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, limit]
-  );
+  let sql = `SELECT * FROM network_requests 
+             WHERE (url LIKE ? 
+             OR requestHeaders LIKE ? 
+             OR responseHeaders LIKE ?
+             OR requestBody LIKE ?
+             OR responseBody LIKE ?
+             OR metadata LIKE ?)`;
+  
+  const params: unknown[] = [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm];
+
+  if (filters?.source) {
+    sql += ' AND JSON_EXTRACT(metadata, "$.source") = ?';
+    params.push(filters.source);
+  }
+
+  if (filters?.backendProcess) {
+    sql += ' AND JSON_EXTRACT(metadata, "$.backendProcess") = ?';
+    params.push(filters.backendProcess);
+  }
+
+  sql += ' ORDER BY timestamp DESC LIMIT ?';
+  params.push(limit);
+
+  const rows = await allAsync<NetworkRequest>(sql, params);
   
   return rows.map(row => ({
     ...row,

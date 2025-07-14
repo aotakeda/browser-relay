@@ -1,8 +1,8 @@
-import { 
-  settingsRunAsync, 
-  settingsAllAsync, 
-  settingsGetAsync 
-} from './settings-database';
+import {
+  settingsRunAsync,
+  settingsAllAsync,
+  settingsGetAsync,
+} from "./settings-database";
 
 export interface ExtensionSettings {
   logsEnabled: boolean;
@@ -23,10 +23,12 @@ class SettingsStorage {
 
   async getSettings(): Promise<ExtensionSettings> {
     try {
-      const rows = await settingsAllAsync<SettingRow>('SELECT key, value FROM extension_settings');
-      
+      const rows = await settingsAllAsync<SettingRow>(
+        "SELECT key, value FROM extension_settings"
+      );
+
       const settings: Partial<ExtensionSettings> = {};
-      
+
       for (const row of rows) {
         try {
           const parsedValue = JSON.parse(row.value);
@@ -42,12 +44,12 @@ class SettingsStorage {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        specificDomains: []
+        specificDomains: [],
       };
 
       return { ...defaultSettings, ...settings } as ExtensionSettings;
     } catch (error) {
-      console.error('Failed to get settings:', error);
+      console.error("Failed to get settings:", error);
       throw error;
     }
   }
@@ -59,8 +61,11 @@ class SettingsStorage {
         return this.cache.get(key) as T;
       }
 
-      const row = await settingsGetAsync<SettingRow>('SELECT value FROM extension_settings WHERE key = ?', [key]);
-      
+      const row = await settingsGetAsync<SettingRow>(
+        "SELECT value FROM extension_settings WHERE key = ?",
+        [key]
+      );
+
       if (row) {
         try {
           const parsedValue = JSON.parse(row.value);
@@ -70,7 +75,7 @@ class SettingsStorage {
           console.warn(`Failed to parse setting ${key}:`, parseError);
         }
       }
-      
+
       return undefined;
     } catch (error) {
       console.error(`Failed to get setting ${key}:`, error);
@@ -78,14 +83,20 @@ class SettingsStorage {
     }
   }
 
-  async updateSetting(key: keyof ExtensionSettings, value: unknown): Promise<void> {
+  async updateSetting(
+    key: keyof ExtensionSettings,
+    value: unknown
+  ): Promise<void> {
     try {
       const jsonValue = JSON.stringify(value);
-      
-      await settingsRunAsync(`
+
+      await settingsRunAsync(
+        `
         INSERT OR REPLACE INTO extension_settings (key, value, updated_at) 
         VALUES (?, ?, CURRENT_TIMESTAMP)
-      `, [key, jsonValue]);
+      `,
+        [key, jsonValue]
+      );
 
       // Update cache
       this.cache.set(key, value);
@@ -99,17 +110,22 @@ class SettingsStorage {
     }
   }
 
-  async updateSettings(settings: Partial<ExtensionSettings>): Promise<ExtensionSettings> {
+  async updateSettings(
+    settings: Partial<ExtensionSettings>
+  ): Promise<ExtensionSettings> {
     try {
       // Update each setting
       for (const [key, value] of Object.entries(settings)) {
         if (value !== undefined) {
           const jsonValue = JSON.stringify(value);
-          
-          await settingsRunAsync(`
+
+          await settingsRunAsync(
+            `
             INSERT OR REPLACE INTO extension_settings (key, value, updated_at) 
             VALUES (?, ?, CURRENT_TIMESTAMP)
-          `, [key, jsonValue]);
+          `,
+            [key, jsonValue]
+          );
 
           // Update cache
           this.cache.set(key, value);
@@ -118,13 +134,13 @@ class SettingsStorage {
 
       // Get updated settings
       const updatedSettings = await this.getSettings();
-      
+
       // Notify listeners
       this.notifyListeners(updatedSettings);
-      
+
       return updatedSettings;
     } catch (error) {
-      console.error('Failed to update settings:', error);
+      console.error("Failed to update settings:", error);
       throw error;
     }
   }
@@ -132,8 +148,8 @@ class SettingsStorage {
   async resetSettings(): Promise<ExtensionSettings> {
     try {
       // Clear all settings
-      await settingsRunAsync('DELETE FROM extension_settings');
-      
+      await settingsRunAsync("DELETE FROM extension_settings");
+
       // Clear cache
       this.cache.clear();
 
@@ -142,24 +158,27 @@ class SettingsStorage {
         logsEnabled: true,
         networkEnabled: true,
         mcpEnabled: false,
-        specificDomains: []
+        specificDomains: [],
       };
 
       for (const [key, value] of Object.entries(defaultSettings)) {
-        await settingsRunAsync(`
+        await settingsRunAsync(
+          `
           INSERT INTO extension_settings (key, value) 
           VALUES (?, ?)
-        `, [key, JSON.stringify(value)]);
+        `,
+          [key, JSON.stringify(value)]
+        );
 
         this.cache.set(key, value);
       }
 
       // Notify listeners
       this.notifyListeners(defaultSettings);
-      
+
       return defaultSettings;
     } catch (error) {
-      console.error('Failed to reset settings:', error);
+      console.error("Failed to reset settings:", error);
       throw error;
     }
   }
@@ -170,15 +189,15 @@ class SettingsStorage {
   }
 
   offSettingsChange(listener: (settings: ExtensionSettings) => void): void {
-    this.listeners = this.listeners.filter(l => l !== listener);
+    this.listeners = this.listeners.filter((l) => l !== listener);
   }
 
   private notifyListeners(settings: ExtensionSettings): void {
-    this.listeners.forEach(listener => {
+    this.listeners.forEach((listener) => {
       try {
         listener(settings);
       } catch (error) {
-        console.error('Error in settings listener:', error);
+        console.error("Error in settings listener:", error);
       }
     });
   }

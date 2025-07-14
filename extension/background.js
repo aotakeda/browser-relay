@@ -16,26 +16,28 @@ let specificDomains = []; // Default to empty array
 // Load settings from server
 const loadSettingsFromServer = async () => {
   try {
-    const response = await fetch('http://localhost:27497/settings', {
-      method: 'GET',
-      signal: AbortSignal.timeout(3000)
+    const response = await fetch("http://localhost:27497/settings", {
+      method: "GET",
+      signal: AbortSignal.timeout(3000),
     });
-    
+
     if (response.ok) {
       const data = await response.json();
       const settings = data.settings;
-      
+
       logsEnabled = settings.logsEnabled !== false; // default to true
       networkEnabled = settings.networkEnabled !== false; // default to true
       mcpEnabled = settings.mcpEnabled === true; // default to false for MCP
       specificDomains = settings.specificDomains || []; // default to empty array
-      
-      console.log('[Browser Relay] Settings loaded from server:', settings);
+
+      console.log("[Local Lens] Settings loaded from server:", settings);
     } else {
-      console.warn('[Browser Relay] Failed to load settings from server, using defaults');
+      console.warn(
+        "[Local Lens] Failed to load settings from server, using defaults"
+      );
     }
   } catch (error) {
-    console.warn('[Browser Relay] Error loading settings from server:', error);
+    console.warn("[Local Lens] Error loading settings from server:", error);
   }
 };
 
@@ -44,7 +46,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   sessionId = `session_${Date.now()}_${Math.random()
     .toString(36)
     .substr(2, 9)}`;
-  
+
   // Load settings from server
   await loadSettingsFromServer();
 });
@@ -52,19 +54,19 @@ chrome.runtime.onInstalled.addListener(async () => {
 // Simple server health check - only check port 27497
 const checkServer = async () => {
   try {
-    const response = await fetch(`http://localhost:27497/health-browser-relay`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(3000)
+    const response = await fetch(`http://localhost:27497/health-local-lens`, {
+      method: "GET",
+      signal: AbortSignal.timeout(3000),
     });
-    
+
     if (response.ok) {
-      console.log('[Browser Relay] Connected to server on port 27497');
+      console.log("[Local Lens] Connected to server on port 27497");
       // Load settings when server is available
       await loadSettingsFromServer();
       return true;
     }
   } catch {
-    console.log('[Browser Relay] Server not found on port 27497');
+    console.log("[Local Lens] Server not found on port 27497");
   }
   return false;
 };
@@ -107,7 +109,7 @@ const sendLogsWithRetry = async (logs) => {
   if (!logsEnabled) {
     return;
   }
-  
+
   try {
     await sendLogsToServer(logs);
   } catch {
@@ -152,7 +154,7 @@ const sendNetworkRequestsWithRetry = async (requests) => {
   if (!networkEnabled) {
     return;
   }
-  
+
   try {
     await sendNetworkRequestsToServer(requests);
   } catch {
@@ -181,116 +183,139 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendNetworkRequestsWithRetry(message.requests);
     sendResponse({ received: true });
   } else if (message.type === "CONTENT_SCRIPT_READY") {
-    sendResponse({ sessionId, logsEnabled, networkEnabled, mcpEnabled, specificDomains });
+    sendResponse({
+      sessionId,
+      logsEnabled,
+      networkEnabled,
+      mcpEnabled,
+      specificDomains,
+    });
   } else if (message.type === "DOMAIN_SETTINGS_CHANGED") {
     specificDomains = message.specificDomains;
-    
+
     // Log warning if no domains specified
     if (specificDomains.length === 0) {
-      console.warn('[Browser Relay] No domains specified - extension will not capture any logs or network requests. Please add domains in the extension popup.');
+      console.warn(
+        "[Local Lens] No domains specified - extension will not capture any logs or network requests. Please add domains in the extension popup."
+      );
     }
-    
+
     // Save to server (async)
-    fetch('http://localhost:27497/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        specificDomains 
+    fetch("http://localhost:27497/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        specificDomains,
       }),
-      signal: AbortSignal.timeout(3000)
+      signal: AbortSignal.timeout(3000),
     }).catch((error) => {
-      console.warn('[Browser Relay] Failed to save domain settings to server:', error);
+      console.warn(
+        "[Local Lens] Failed to save domain settings to server:",
+        error
+      );
     });
-    
+
     // Notify all content scripts of the domain setting changes
     chrome.tabs.query({}, (tabs) => {
-      tabs.forEach(tab => {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'DOMAIN_SETTINGS_CHANGED',
-          specificDomains
-        }).catch(() => {
-          // Ignore errors for tabs that don't have content scripts
-        });
+      tabs.forEach((tab) => {
+        chrome.tabs
+          .sendMessage(tab.id, {
+            type: "DOMAIN_SETTINGS_CHANGED",
+            specificDomains,
+          })
+          .catch(() => {
+            // Ignore errors for tabs that don't have content scripts
+          });
       });
     });
-    
+
     sendResponse({ success: true });
   } else if (message.type === "TOGGLE_LOGS") {
     logsEnabled = message.enabled;
-    
+
     // Save to server (async)
-    fetch('http://localhost:27497/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    fetch("http://localhost:27497/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ logsEnabled }),
-      signal: AbortSignal.timeout(3000)
+      signal: AbortSignal.timeout(3000),
     }).catch((error) => {
-      console.warn('[Browser Relay] Failed to save logs setting to server:', error);
+      console.warn(
+        "[Local Lens] Failed to save logs setting to server:",
+        error
+      );
     });
-    
+
     // Notify all content scripts of the state change
     chrome.tabs.query({}, (tabs) => {
-      tabs.forEach(tab => {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'LOGS_STATE_CHANGED',
-          enabled: logsEnabled
-        }).catch(() => {
-          // Ignore errors for tabs that don't have content scripts
-        });
+      tabs.forEach((tab) => {
+        chrome.tabs
+          .sendMessage(tab.id, {
+            type: "LOGS_STATE_CHANGED",
+            enabled: logsEnabled,
+          })
+          .catch(() => {
+            // Ignore errors for tabs that don't have content scripts
+          });
       });
     });
-    
+
     sendResponse({ success: true });
   } else if (message.type === "TOGGLE_NETWORK") {
     networkEnabled = message.enabled;
-    
+
     // Save to server (async)
-    fetch('http://localhost:27497/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    fetch("http://localhost:27497/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ networkEnabled }),
-      signal: AbortSignal.timeout(3000)
+      signal: AbortSignal.timeout(3000),
     }).catch((error) => {
-      console.warn('[Browser Relay] Failed to save network setting to server:', error);
+      console.warn(
+        "[Local Lens] Failed to save network setting to server:",
+        error
+      );
     });
-    
+
     // Notify all content scripts of the state change
     chrome.tabs.query({}, (tabs) => {
-      tabs.forEach(tab => {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'NETWORK_STATE_CHANGED',
-          enabled: networkEnabled
-        }).catch(() => {
-          // Ignore errors for tabs that don't have content scripts
-        });
+      tabs.forEach((tab) => {
+        chrome.tabs
+          .sendMessage(tab.id, {
+            type: "NETWORK_STATE_CHANGED",
+            enabled: networkEnabled,
+          })
+          .catch(() => {
+            // Ignore errors for tabs that don't have content scripts
+          });
       });
     });
-    
+
     sendResponse({ success: true });
   } else if (message.type === "TOGGLE_MCP") {
     mcpEnabled = message.enabled;
-    
+
     // Save to server (async)
-    fetch('http://localhost:27497/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    fetch("http://localhost:27497/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mcpEnabled }),
-      signal: AbortSignal.timeout(3000)
+      signal: AbortSignal.timeout(3000),
     }).catch((error) => {
-      console.warn('[Browser Relay] Failed to save MCP setting to server:', error);
+      console.warn("[Local Lens] Failed to save MCP setting to server:", error);
     });
-    
+
     // Send MCP setting to server
-    fetch('http://localhost:27497/mcp-config', {
-      method: 'POST',
+    fetch("http://localhost:27497/mcp-config", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ mcpEnabled })
+      body: JSON.stringify({ mcpEnabled }),
     }).catch(() => {
       // Silently fail if server is not available
     });
-    
+
     sendResponse({ success: true });
   }
 
@@ -299,7 +324,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Network request capture - DISABLED in favor of inject script capture
 // The inject script can capture response bodies, which webRequest API cannot
-// 
+//
 // chrome.webRequest.onBeforeRequest.addListener(
 //   (details) => {
 //     if (!networkEnabled || !shouldCaptureRequest(details.url)) return;

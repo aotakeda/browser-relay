@@ -156,7 +156,7 @@ networkRequestsRouter.post("/", async (req, res) => {
         .json({ error: "Invalid network request batch format" });
     }
 
-    // Filter out Browser Relay's own network requests and apply configuration
+    // Filter out Local Lens's own network requests and apply configuration
     const filteredRequests = batch.requests
       .filter((request) => {
         // Filter out ALL requests to our own server (port 27497)
@@ -164,17 +164,17 @@ networkRequestsRouter.post("/", async (req, res) => {
           return false;
         }
 
-        // Filter out Browser Relay's own health check requests for port detection
+        // Filter out Local Lens's own health check requests for port detection
         if (
           request.url.includes("localhost:") &&
-          request.url.includes("/health-browser-relay")
+          request.url.includes("/health-local-lens")
         ) {
           return false;
         }
 
         // Filter out extension and other noise
         if (
-          request.url.includes("browser-relay") ||
+          request.url.includes("local-lens") ||
           request.pageUrl.includes("chrome-extension://")
         ) {
           return false;
@@ -183,10 +183,10 @@ networkRequestsRouter.post("/", async (req, res) => {
         // Filter out common static assets (images, fonts, etc.)
         const staticAssetPatterns = [
           /\.(png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|otf|eot)$/i,
-          /\.(css|js|map)$/i
+          /\.(css|js|map)$/i,
         ];
-        
-        if (staticAssetPatterns.some(pattern => pattern.test(request.url))) {
+
+        if (staticAssetPatterns.some((pattern) => pattern.test(request.url))) {
           return false;
         }
 
@@ -251,7 +251,7 @@ networkRequestsRouter.post("/", async (req, res) => {
       });
     }
 
-    // Only store non-Browser Relay network requests in database
+    // Only store non-Local Lens network requests in database
     const insertedRequests = await networkStorage.insertRequests(
       filteredRequests
     );
